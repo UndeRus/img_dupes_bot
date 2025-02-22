@@ -17,7 +17,7 @@ fn hamming_distance(hash1: &str, hash2: &str) -> Result<u32, ()> {
 
 #[derive(Debug)]
 pub struct HashRecord {
-    pub(crate) id: i32,
+    pub id: i32,
     filename: String,
     hash: String,
     file_id: String,
@@ -112,4 +112,18 @@ pub fn find_similar_hashes(
     }
 
     Ok(similar_hashes)
+}
+
+
+pub fn delete_old_hash( conn: &Connection, hash_id: i32) -> Result<(), rusqlite::Error> {
+    let mut stmt = conn.prepare(
+        "DELETE FROM hashes WHERE id = ?",
+    )?;
+
+    let mut result = stmt.query(rusqlite::params![hash_id]).map_err(|e|{
+        eprint!("Delete error {}",e);
+        e
+    })?;
+
+    Ok(())
 }

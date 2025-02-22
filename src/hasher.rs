@@ -7,9 +7,7 @@ use glob::glob;
 use tokio::sync::Mutex;
 
 use crate::{
-    db,
-    file_storage::{FileStorage, LocalFileStorage},
-    find_image_by_unique_file_id, find_similar_hashes, HashRecord,
+    db, delete_old_hash, file_storage::{FileStorage, LocalFileStorage}, find_image_by_unique_file_id, find_similar_hashes, HashRecord
 };
 
 pub struct Indexer {
@@ -143,6 +141,12 @@ impl Indexer {
             ()
         })?;
         Ok(())
+    }
+
+
+    pub async fn delete_old_hash(&mut self, hash_id: i32) {
+        let mut db = self.db.lock().await;
+        delete_old_hash(&db, hash_id);
     }
 }
 

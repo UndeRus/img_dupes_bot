@@ -11,6 +11,7 @@ use img_hashing_bot::hasher::Indexer;
 use tokio::{fs, signal, sync::Mutex};
 
 const MESSAGE_FOUND_MSG: &str = "Эту картинку уже постили тут:";
+const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not found";
 
 #[tokio::main]
 async fn main() -> Result<(), ()> {
@@ -117,7 +118,16 @@ async fn process_message(
                         .build();
 
                     if let Err(e) = api.send_message(&send_message_params).await {
-                        tracing::error!("Failed to send message {}", e);
+                        //TODO: remove image from db if cannot find original
+                        if let frankenstein::Error::Api(e) = e {
+                            if e.description == REPLY_NOT_FOUND_ERROR {
+                                tracing::error!("Reply not found, delete from db");
+                                let hash_record = file_processed_info;
+                                indexer.delete_old_hash(hash_record.id).await;
+                            }
+                        } else {
+                            tracing::error!("Failed to send message about same file id {}", e);
+                        }
                     }
 
                     return Ok(());
@@ -159,12 +169,6 @@ async fn process_message(
 
                         if !result.is_empty() {
                             log::info!("Found images {:?}", result);
-                            //remove file
-                            if let Err(e) = fs::remove_file(destination_path).await {
-                                tracing::error!("Failed to remove file {}", e);
-                                return Err(());
-                            }
-                            // Extract to FileStorage
 
                             // notify to chat
                             let found_result_in_chat = result.first().ok_or(())?;
@@ -179,9 +183,39 @@ async fn process_message(
                                 .build();
 
                             if let Err(e) = api.send_message(&send_message_params).await {
-                                tracing::error!("Failed to send message {}", e);
+                                if let frankenstein::Error::Api(e) = e {
+                                    if e.description == REPLY_NOT_FOUND_ERROR {
+                                        // remove old record
+                                        tracing::error!("Reply not found, delete from db");
+                                        let hash_record = result.first().unwrap();
+                                        indexer.delete_old_hash(hash_record.id).await;
+                                        // then index new image
+                                        if let Err(e) = indexer
+                                            .save_to_index(
+                                                destination_path.to_str().unwrap_or(""),
+                                                message.chat.id,
+                                                message.message_id as i64,
+                                                &response.result.file_unique_id,
+                                                (&hash_landscape, &hash_portrait, &hash_square),
+                                            )
+                                            .await
+                                        {
+                                            tracing::error!("Failed to index image {:?}", e);
+                                        }
+                                        return Ok(());
+                                    }
+                                } else {
+                                    tracing::error!("Failed to send message about file with almost same hash {}", e);
+                                    return Err(());
+                                }
+                            }
+
+                            //remove file
+                            if let Err(e) = fs::remove_file(destination_path).await {
+                                tracing::error!("Failed to remove file {}", e);
                                 return Err(());
                             }
+                            // Extract to FileStorage
 
                             return Ok(());
                         }
