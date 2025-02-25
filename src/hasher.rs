@@ -10,7 +10,7 @@ use crate::{
     db, delete_old_hash, file_storage::{FileStorage, LocalFileStorage}, find_image_by_unique_file_id, find_similar_hashes, HashRecord
 };
 
-const PERCEPTIVE_HASH_TOLERANCE: usize = 10;
+const PERCEPTIVE_HASH_TOLERANCE: usize = 5;
 
 pub struct Indexer {
     hasher_landscape: Hasher,
