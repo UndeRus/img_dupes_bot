@@ -10,6 +10,8 @@ use crate::{
     db, delete_old_hash, file_storage::{FileStorage, LocalFileStorage}, find_image_by_unique_file_id, find_similar_hashes, HashRecord
 };
 
+const PERCEPTIVE_HASH_TOLERANCE: usize = 20;
+
 pub struct Indexer {
     hasher_landscape: Hasher,
     hasher_portrait: Hasher,
@@ -69,7 +71,7 @@ impl Indexer {
         let results: Vec<HashRecord> = [hash_landscape, hash_portrait, hash_square]
             .iter()
             .filter_map(|hash_str| {
-                let result = find_similar_hashes(&db, &hash_str, 20, chat_id);
+                let result = find_similar_hashes(&db, &hash_str, PERCEPTIVE_HASH_TOLERANCE, chat_id);
                 result.ok()
             })
             .flatten()
