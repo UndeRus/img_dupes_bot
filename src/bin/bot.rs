@@ -76,7 +76,7 @@ async fn main() -> Result<(), ()> {
 
 #[tracing::instrument(
     name = "Process new message subscriber",
-    skip(api, files_endpoint, indexer)
+    skip(message, api, files_endpoint, indexer)
 )]
 async fn process_message(
     message: Message,
@@ -98,8 +98,7 @@ async fn process_message(
             let response = api.get_file(&params).await;
             if let Ok(response) = response {
                 let mut indexer = indexer.lock().await;
-                //response.result.file_unique_id
-                //TODO: check by unique id
+                // check by unique id
                 let file_processed_info = indexer
                     .is_file_processed_info(&response.result.file_unique_id)
                     .await;
@@ -121,9 +120,15 @@ async fn process_message(
                         //TODO: remove image from db if cannot find original
                         if let frankenstein::Error::Api(e) = e {
                             if e.description == REPLY_NOT_FOUND_ERROR {
-                                tracing::error!("Reply not found, delete from db");
+                                tracing::warn!("Reply not found, update existing record");
                                 let hash_record = file_processed_info;
-                                indexer.delete_old_hash(hash_record.id).await;
+                                indexer
+                                    .update_old_hash(
+                                        hash_record.id,
+                                        message.chat.id,
+                                        message.message_id as i64,
+                                    )
+                                    .await;
                             }
                         } else {
                             tracing::error!("Failed to send message about same file id {}", e);
@@ -186,22 +191,14 @@ async fn process_message(
                                 if let frankenstein::Error::Api(e) = e {
                                     if e.description == REPLY_NOT_FOUND_ERROR {
                                         // remove old record
-                                        tracing::error!("Reply not found, delete from db");
-                                        let hash_record = result.first().unwrap();
-                                        indexer.delete_old_hash(hash_record.id).await;
-                                        // then index new image
-                                        if let Err(e) = indexer
-                                            .save_to_index(
-                                                destination_path.to_str().unwrap_or(""),
+                                        tracing::error!("Reply not found after indexing, update record in db, old message_id: {}, new message_id: {}", found_result_in_chat.message_id, message.message_id);
+                                        indexer
+                                            .update_old_hash(
+                                                found_result_in_chat.id,
                                                 message.chat.id,
                                                 message.message_id as i64,
-                                                &response.result.file_unique_id,
-                                                (&hash_landscape, &hash_portrait, &hash_square),
                                             )
-                                            .await
-                                        {
-                                            tracing::error!("Failed to index image {:?}", e);
-                                        }
+                                            .await;
                                         return Ok(());
                                     }
                                 } else {

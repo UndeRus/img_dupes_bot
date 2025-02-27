@@ -60,6 +60,7 @@ pub fn find_similar_hashes(
     input_hash: &str,
     max_distance: usize,
     chat_id: i64,
+    from_timestamp: u64,
 ) -> Result<Vec<HashRecord>> {
     // Decode input hash to binary
     //let input_bytes = decode_base64_hash(input_hash);
@@ -77,26 +78,14 @@ pub fn find_similar_hashes(
         eprintln!("Failed to register function {}", e);
         e
     })?;
-
-    // Execute query with Hamming distance constraint
-
-    //Rework after
-    /*
     let mut stmt = conn.prepare(
-        "SELECT id, filename, base64_hash, file_id, chat_id, message_id FROM hashes ORDER BY hamming_distance(base64_hash, ?) DESC LIMIT 10",
-    ).map_err(|e|{
-        eprint!("Failed to execute query to search similar {}", e);
-        e
-    })?;
-    */
-    let mut stmt = conn.prepare(
-        "SELECT id, filename, base64_hash, file_id, chat_id, message_id, hamming_distance(base64_hash, ?) as dist FROM hashes WHERE chat_id  = ? AND dist < ? ORDER by dist ASC",
+        "SELECT id, filename, base64_hash, file_id, chat_id, message_id, hamming_distance(base64_hash, ?) as dist FROM hashes WHERE chat_id  = ? AND dist < ? AND created_at > ? ORDER by dist ASC",
     ).map_err(|e|{
         eprint!("Failed to execute query to search similar {}", e);
         e
     })?;
 
-    let mut rows = stmt.query(rusqlite::params![input_hash, chat_id, max_distance])?;
+    let mut rows = stmt.query(rusqlite::params![input_hash, chat_id, max_distance, from_timestamp])?;
 
     // Collect results
     let mut similar_hashes = Vec::new();
@@ -120,10 +109,23 @@ pub fn delete_old_hash( conn: &Connection, hash_id: i32) -> Result<(), rusqlite:
         "DELETE FROM hashes WHERE id = ?",
     )?;
 
-    let mut result = stmt.query(rusqlite::params![hash_id]).map_err(|e|{
-        eprint!("Delete error {}",e);
+    let result = stmt.execute(rusqlite::params![hash_id]).map_err(|e|{
+        tracing::error!("Delete error {}",e);
         e
     })?;
+    tracing::info!("Hash records deleted {}", result);
+    Ok(())
+}
 
+pub fn move_old_hash_to_new(conn: &Connection, hash_id: i32, chat_id: i64, message_id: i64) -> Result<(), rusqlite::Error>  {
+    let mut stmt = conn.prepare(
+        "UPDATE hashes SET message_id = ? WHERE id = ? AND chat_id = ?",
+    )?;
+
+    let result = stmt.execute(rusqlite::params![message_id, hash_id, chat_id]).map_err(|e|{
+        tracing::error!("Update error {}",e);
+        e
+    })?;
+    tracing::info!("Hash records updated {}", result);
     Ok(())
 }
