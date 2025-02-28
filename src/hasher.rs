@@ -116,7 +116,7 @@ impl Indexer {
                     r#"INSERT INTO hashes(filename, orientation, base64_hash, chat_id, message_id, file_id, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)"#,
                 )
                 .map_err(|e| {
-                    tracing::error!("Complile statement error {}", e);
+                    tracing::error!("Compile statement error {}", e);
                     ()
                 })?;
 
@@ -187,6 +187,8 @@ impl Indexer {
         let db = self.db.lock().await;
         if let Err(e) = move_old_hash_to_new(&db, hash_id, chat_id, message_id) {
             tracing::error!("Failed to update old hash: {}", e);
+        } else {
+            tracing::info!("Old hash updated");
         }
     }
 }

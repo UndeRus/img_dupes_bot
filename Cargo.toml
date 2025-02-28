@@ -21,9 +21,14 @@ glob = "0.3.1"
 image = { version = "0.25.4", default-features = false, features = ["png", "jpeg"]}
 image_hasher = "2.0.0"
 log = "0.4.25"
+opentelemetry = "0.28.0"
+opentelemetry-otlp = {version = "0.28.0", features = ["grpc-tonic"]}
+opentelemetry-stdout = "0.28.0"
+opentelemetry_sdk = "0.28.0"
 rayon = "1.10.0"
 reqwest = "0.12.12"
 rusqlite = { version = "0.32.1", features = ["functions", "bundled"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "signal"] }
 tracing = "0.1.41"
+tracing-opentelemetry = "0.29.0"
 tracing-subscriber = "0.3.19"

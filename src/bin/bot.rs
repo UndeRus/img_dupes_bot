@@ -1,13 +1,15 @@
-use std::{ffi::OsStr, io::Cursor, sync::Arc};
+use std::{ffi::OsStr, io::Cursor, path::{Path, PathBuf}, sync::Arc};
 
 use dotenv::dotenv;
 use dotenv_codegen::dotenv;
 
 use frankenstein::{
-    AsyncApi, AsyncTelegramApi, GetFileParams, GetUpdatesParams, Message, ReplyParameters,
-    SendMessageParams, UpdateContent,
+    AsyncApi, AsyncTelegramApi, File, GetFileParams, GetUpdatesParams, Message, MethodResponse,
+    ReplyParameters, SendMessageParams, UpdateContent,
 };
-use img_hashing_bot::hasher::Indexer;
+
+use img_hashing_bot::{hasher::Indexer, tracing_setup::init_tracing};
+use reqwest::Response;
 use tokio::{fs, signal, sync::Mutex};
 
 const MESSAGE_FOUND_MSG: &str = "Эту картинку уже постили тут:";
@@ -16,9 +18,8 @@ const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not foun
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     dotenv().ok();
-    let subscriber = tracing_subscriber::FmtSubscriber::new();
-    tracing::subscriber::set_global_default(subscriber).map_err(|_| ())?;
 
+    init_tracing();
     let indexer = Arc::new(Mutex::new(Indexer::new()));
 
     let bot_api_token = dotenv!("TELEGRAM_BOT_API_TOKEN");
@@ -76,7 +77,7 @@ async fn main() -> Result<(), ()> {
 
 #[tracing::instrument(
     name = "Process new message subscriber",
-    skip(message, api, files_endpoint, indexer)
+    skip(api, files_endpoint, indexer)
 )]
 async fn process_message(
     message: Message,
@@ -115,6 +116,7 @@ async fn process_message(
                         .text(MESSAGE_FOUND_MSG)
                         .reply_parameters(reply_params)
                         .build();
+                    tracing::info!("Message sent to chat");
 
                     if let Err(e) = api.send_message(&send_message_params).await {
                         //TODO: remove image from db if cannot find original
@@ -138,32 +140,14 @@ async fn process_message(
                     return Ok(());
                 }
 
-                if let Some(file_path) = response.result.file_path {
+                if let Some(file_path) = response.result.file_path.clone() {
                     let file_response =
                         reqwest::get(format!("{}/{}", files_endpoint, file_path)).await;
                     if let Ok(file_response) = file_response {
-                        let original_path = std::path::Path::new(&file_path);
-                        let extension = original_path
-                            .extension()
-                            .and_then(OsStr::to_str)
-                            .unwrap_or("");
-
-                        // TODO: extract ot file storage implementation
-                        let destination_path = format!(
-                            "./files/{path}.{extension}",
-                            path = response.result.file_unique_id,
-                            extension = extension
-                        );
-                        let destination_path = std::path::Path::new(&destination_path);
-                        let prefix = destination_path.parent().unwrap();
-                        std::fs::create_dir_all(prefix).unwrap();
-                        let mut file = std::fs::File::create(destination_path).map_err(|_| ())?;
-                        let mut content = Cursor::new(file_response.bytes().await.map_err(|_| ())?);
-                        std::io::copy(&mut content, &mut file).map_err(|_| ())?;
-                        //TODO: process image with indexer
+                        let destination_path = save_file(&file_path, &response, file_response).await?;
 
                         let (hash_landscape, hash_portrait, hash_square) =
-                            indexer.hash_image(&image::open(destination_path).unwrap());
+                            indexer.hash_image(&image::open(&destination_path).unwrap());
 
                         let result = indexer
                             .find_similar_hashes(
@@ -205,6 +189,8 @@ async fn process_message(
                                     tracing::error!("Failed to send message about file with almost same hash {}", e);
                                     return Err(());
                                 }
+                            } else {
+                                tracing::info!("Message sent to chat");
                             }
 
                             //remove file
@@ -244,4 +230,30 @@ async fn process_message(
             Ok(())
         }
     }
+}
+
+#[tracing::instrument(
+    name = "Save file",
+    skip(file_response)
+)]
+async fn save_file(file_path: &str, response: &MethodResponse<File>, file_response: Response) -> Result<PathBuf, ()> {
+    let original_path = std::path::Path::new(file_path);
+    let extension = original_path
+        .extension()
+        .and_then(OsStr::to_str)
+        .unwrap_or("");
+
+    // TODO: extract ot file storage implementation
+    let destination_path_str = format!(
+        "./files/{path}.{extension}",
+        path = response.result.file_unique_id,
+        extension = extension
+    );
+    let destination_path = std::path::Path::new(&destination_path_str);
+    let prefix = destination_path.parent().unwrap();
+    std::fs::create_dir_all(prefix).unwrap();
+    let mut file = std::fs::File::create(destination_path).map_err(|_| ())?;
+    let mut content = Cursor::new(file_response.bytes().await.map_err(|_| ())?);
+    std::io::copy(&mut content, &mut file).map_err(|_| ())?;
+    Ok(destination_path.to_path_buf())
 }
