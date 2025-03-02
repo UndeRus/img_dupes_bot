@@ -46,6 +46,9 @@ async fn main() -> Result<(), ()> {
 
                                         let indexer = indexer.clone();
                                         tokio::spawn(async move {
+                                            if message.photo.is_none() {
+                                                return;
+                                            }
                                             if let Err(_) = process_message(message, api_clone, &files_endpoint, indexer).await {
                                                 tracing::error!("Failed to start message processing");
                                             }
