@@ -106,6 +106,8 @@ async fn process_message(
                 let file_processed_info = indexer
                     .is_file_processed_info(&response.result.file_unique_id)
                     .await;
+
+                //TODO: check this file already exists
                 if let Some(file_processed_info) = file_processed_info {
                     //TODO: return existing file info to chat
 
@@ -143,6 +145,7 @@ async fn process_message(
                     return Ok(());
                 }
 
+                // Download file
                 if let Some(file_path) = response.result.file_path.clone() {
                     let file_response =
                         reqwest::get(format!("{}/{}", files_endpoint, file_path)).await;
@@ -159,6 +162,7 @@ async fn process_message(
                             )
                             .await;
 
+                        // Similar hash exists
                         if !result.is_empty() {
                             log::info!("Found images {:?}", result);
 
@@ -206,6 +210,7 @@ async fn process_message(
                             return Ok(());
                         }
 
+                        // Save to index
                         if let Err(e) = indexer
                             .save_to_index(
                                 destination_path.to_str().unwrap_or(""),
