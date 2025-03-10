@@ -9,7 +9,8 @@ use image_hasher::{HashAlg, Hasher, HasherConfig};
 use tokio::sync::Mutex;
 
 use crate::{
-    db, delete_old_hash, file_storage::LocalFileStorage, find_image_by_unique_file_id, find_similar_hashes, move_old_hash_to_new, HashRecord
+    db, delete_old_hash, file_storage::LocalFileStorage, find_image_by_unique_file_id,
+    find_similar_hashes, move_old_hash_to_new, HashRecord,
 };
 
 const PERCEPTIVE_HASH_TOLERANCE: usize = 5;

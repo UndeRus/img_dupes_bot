@@ -40,10 +40,13 @@ pub fn find_image_by_unique_file_id(conn: &Connection, unique_file_id: &str) -> 
         "SELECT id, filename, base64_hash, file_id, chat_id, message_id FROM hashes file_id = ?",
     ).ok()?;
 
-    let mut result = stmt.query(rusqlite::params![unique_file_id]).map_err(|e|{
-        eprint!("Select error {}",e);
-        e
-    }).ok()?;
+    let mut result = stmt
+        .query(rusqlite::params![unique_file_id])
+        .map_err(|e| {
+            eprint!("Select error {}", e);
+            e
+        })
+        .ok()?;
     let row = result.next().ok()??;
 
     Some(HashRecord {
@@ -75,7 +78,8 @@ pub fn find_similar_hashes(
             hamming_sqlite_func(ctx)
             //Ok(dist as i64)
         },
-    ).map_err(|e|{
+    )
+    .map_err(|e| {
         eprintln!("Failed to register function {}", e);
         e
     })?;
@@ -86,7 +90,12 @@ pub fn find_similar_hashes(
         e
     })?;
 
-    let mut rows = stmt.query(rusqlite::params![input_hash, chat_id, max_distance, from_timestamp])?;
+    let mut rows = stmt.query(rusqlite::params![
+        input_hash,
+        chat_id,
+        max_distance,
+        from_timestamp
+    ])?;
 
     // Collect results
     let mut similar_hashes = Vec::new();
@@ -104,29 +113,31 @@ pub fn find_similar_hashes(
     Ok(similar_hashes)
 }
 
+pub fn delete_old_hash(conn: &Connection, hash_id: i32) -> Result<(), rusqlite::Error> {
+    let mut stmt = conn.prepare("DELETE FROM hashes WHERE id = ?")?;
 
-pub fn delete_old_hash( conn: &Connection, hash_id: i32) -> Result<(), rusqlite::Error> {
-    let mut stmt = conn.prepare(
-        "DELETE FROM hashes WHERE id = ?",
-    )?;
-
-    let result = stmt.execute(rusqlite::params![hash_id]).map_err(|e|{
-        tracing::error!("Delete error {}",e);
+    let result = stmt.execute(rusqlite::params![hash_id]).map_err(|e| {
+        tracing::error!("Delete error {}", e);
         e
     })?;
     tracing::info!("Hash records deleted {}", result);
     Ok(())
 }
 
-pub fn move_old_hash_to_new(conn: &Connection, hash_id: i32, chat_id: i64, message_id: i64) -> Result<(), rusqlite::Error>  {
-    let mut stmt = conn.prepare(
-        "UPDATE hashes SET message_id = ? WHERE id = ? AND chat_id = ?",
-    )?;
+pub fn move_old_hash_to_new(
+    conn: &Connection,
+    hash_id: i32,
+    chat_id: i64,
+    message_id: i64,
+) -> Result<(), rusqlite::Error> {
+    let mut stmt = conn.prepare("UPDATE hashes SET message_id = ? WHERE id = ? AND chat_id = ?")?;
 
-    let result = stmt.execute(rusqlite::params![message_id, hash_id, chat_id]).map_err(|e|{
-        tracing::error!("Update error {}",e);
-        e
-    })?;
+    let result = stmt
+        .execute(rusqlite::params![message_id, hash_id, chat_id])
+        .map_err(|e| {
+            tracing::error!("Update error {}", e);
+            e
+        })?;
     tracing::info!("Hash records updated {}", result);
     Ok(())
 }

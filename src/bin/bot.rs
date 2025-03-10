@@ -1,4 +1,9 @@
-use std::{ffi::OsStr, io::Cursor, path::{Path, PathBuf}, sync::Arc};
+use std::{
+    ffi::OsStr,
+    io::Cursor,
+    path::{Path, PathBuf},
+    sync::Arc,
+};
 
 use dotenv::dotenv;
 use dotenv_codegen::dotenv;
@@ -151,7 +156,8 @@ async fn process_message(
                     let file_response =
                         reqwest::get(format!("{}/{}", files_endpoint, file_path)).await;
                     if let Ok(file_response) = file_response {
-                        let destination_path = save_file(&file_path, &response, file_response).await?;
+                        let destination_path =
+                            save_file(&file_path, &response, file_response).await?;
 
                         let (hash_landscape, hash_portrait, hash_square) =
                             indexer.hash_image(&image::open(&destination_path).unwrap());
@@ -241,11 +247,12 @@ async fn process_message(
     }
 }
 
-#[tracing::instrument(
-    name = "Save file",
-    skip(file_response)
-)]
-async fn save_file(file_path: &str, response: &MethodResponse<File>, file_response: Response) -> Result<PathBuf, ()> {
+#[tracing::instrument(name = "Save file", skip(file_response))]
+async fn save_file(
+    file_path: &str,
+    response: &MethodResponse<File>,
+    file_response: Response,
+) -> Result<PathBuf, ()> {
     let original_path = std::path::Path::new(file_path);
     let extension = original_path
         .extension()

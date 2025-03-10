@@ -32,8 +32,7 @@ fn init_tracing_subscriber(tracer: Tracer) {
 
     let subscriber = Registry::default()
         .with(filter_otel)
-        .with(opentelemetry_layer)
-        ;
+        .with(opentelemetry_layer);
     tracing::subscriber::set_global_default(subscriber).expect("Setting tracing subscriber failed");
 }
 
