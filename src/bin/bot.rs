@@ -19,7 +19,7 @@ const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not foun
 async fn main() -> Result<(), ()> {
     dotenv().ok();
 
-    init_tracing();
+    let finisher = init_tracing();
     let indexer = Arc::new(Mutex::new(Indexer::new()));
 
     let bot_api_token = dotenv!("TELEGRAM_BOT_API_TOKEN");
@@ -75,6 +75,7 @@ async fn main() -> Result<(), ()> {
             }
         }
     }
+    finisher();
     Ok(())
 }
 

@@ -1,37 +1,63 @@
 use opentelemetry::{global, trace::TracerProvider};
-use opentelemetry_otlp::WithExportConfig;
-use opentelemetry_sdk::{trace::{SdkTracerProvider, Tracer}, Resource};
+use opentelemetry_otlp::{SpanExporter, WithExportConfig, WithTonicConfig};
+use opentelemetry_sdk::{
+    propagation::TraceContextPropagator,
+    trace::{SdkTracerProvider, Tracer},
+    Resource,
+};
+use tonic::metadata::MetadataMap;
 use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::{layer::SubscriberExt, Registry};
+use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
-
-fn init_tracer() -> Tracer {
-    let otlp_exporter = opentelemetry_otlp::SpanExporter::builder()
-        .with_tonic() // Use gRPC transport
-        .with_endpoint("http://localhost:4317") // Set your Jaeger OTLP endpoint
-        .build()
-        .expect("Failed to build otlp exporter");
-
-    let provider = SdkTracerProvider::builder()
-        .with_batch_exporter(otlp_exporter)
-        .with_resource(
-            Resource::builder()
-                .with_service_name("telegram-img-dupes-bot-service")
-                .build(),
-        )
-        .build();
-
-    let tracer = provider.tracer("telegram-img-dupes-bot");
-    global::set_tracer_provider(provider);
-    tracer
+fn metadata() -> MetadataMap {
+    let metadata = MetadataMap::new();
+    metadata
 }
 
-pub fn init_tracing() {
-    let tracer = init_tracer();
-    let telemetry_layer = OpenTelemetryLayer::new(tracer);
-    
-    let subscriber = Registry::default().with(telemetry_layer);
-    
-    tracing::subscriber::set_global_default(subscriber)
-        .expect("Failed to set tracing subscriber");
+fn resource() -> Resource {
+    Resource::builder()
+        .with_service_name("img dupes tgbot")
+        .build()
+}
+
+fn init_tracing_subscriber(tracer: Tracer) {
+    let filter_otel = EnvFilter::new("info")
+        .add_directive("hyper=off".parse().unwrap())
+        .add_directive("opentelemetry=off".parse().unwrap())
+        .add_directive("tonic=off".parse().unwrap())
+        .add_directive("h2=off".parse().unwrap())
+        .add_directive("reqwest=off".parse().unwrap());
+
+    let opentelemetry_layer = OpenTelemetryLayer::new(tracer);
+
+    let subscriber = Registry::default()
+        .with(filter_otel)
+        .with(opentelemetry_layer)
+        ;
+    tracing::subscriber::set_global_default(subscriber).expect("Setting tracing subscriber failed");
+}
+
+pub fn init_tracing() -> impl Fn() -> () {
+    // To send traces to jaeger
+    let exporter = SpanExporter::builder()
+        .with_tonic()
+        .with_endpoint("http://localhost:4317/")
+        .with_metadata(metadata())
+        .build()
+        .expect("Failed to init otlp exporter");
+
+    global::set_text_map_propagator(TraceContextPropagator::new());
+
+    // To connect traces to exporter
+    let provider = SdkTracerProvider::builder()
+        .with_batch_exporter(exporter)
+        .with_resource(resource())
+        .build();
+    init_tracing_subscriber(provider.tracer("img dupes bot"));
+
+    global::set_tracer_provider(provider.clone());
+
+    return Box::new(move || {
+        provider.shutdown().unwrap();
+    });
 }
