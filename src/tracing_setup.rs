@@ -9,8 +9,11 @@ use tonic::metadata::MetadataMap;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
 
-fn metadata() -> MetadataMap {
-    let metadata = MetadataMap::new();
+fn metadata(auth_token: &str) -> MetadataMap {
+    let mut metadata = MetadataMap::new();
+    metadata.insert("authorization", format!("Basic {}", auth_token).parse().unwrap());
+    metadata.insert("organization", "default".parse().unwrap());
+    metadata.insert("stream-name", "default".parse().unwrap());
     metadata
 }
 
@@ -36,12 +39,12 @@ fn init_tracing_subscriber(tracer: Tracer) {
     tracing::subscriber::set_global_default(subscriber).expect("Setting tracing subscriber failed");
 }
 
-pub fn init_tracing() -> impl Fn() -> () {
+pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() -> () {
     // To send traces to jaeger
     let exporter = SpanExporter::builder()
         .with_tonic()
-        .with_endpoint("http://localhost:4317/")
-        .with_metadata(metadata())
+        .with_endpoint(otlp_endpoint)
+        .with_metadata(metadata(token))
         .build()
         .expect("Failed to init otlp exporter");
 

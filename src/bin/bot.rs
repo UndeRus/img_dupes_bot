@@ -1,13 +1,13 @@
 use std::{
     ffi::OsStr,
     io::Cursor,
-    path::{Path, PathBuf},
+    path::PathBuf,
     sync::Arc,
 };
 
-use dotenv::dotenv;
-use dotenv_codegen::dotenv;
 
+use dotenvy::dotenv;
+use dotenvy_macro::dotenv;
 use frankenstein::{
     AsyncApi, AsyncTelegramApi, File, GetFileParams, GetUpdatesParams, Message, MethodResponse,
     ReplyParameters, SendMessageParams, UpdateContent,
@@ -24,7 +24,7 @@ const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not foun
 async fn main() -> Result<(), ()> {
     dotenv().ok();
 
-    let finisher = init_tracing();
+    let finisher = init_tracing(dotenv!("OTLP_ENDPOINT"), dotenv!("OTLP_TOKEN"));
     let indexer = Arc::new(Mutex::new(Indexer::new()));
 
     let bot_api_token = dotenv!("TELEGRAM_BOT_API_TOKEN");

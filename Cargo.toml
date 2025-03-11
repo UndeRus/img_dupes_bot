@@ -14,8 +14,8 @@ path = "./src/bin/bot.rs"
 
 [dependencies]
 base64 = "0.22.1"
-dotenv = "0.15.0"
-dotenv_codegen = "0.15.0"
+dotenvy = "0.15.0"
+dotenvy_macro = "0.15.0"
 frankenstein = { version = "0.38.0", features = ["async-http-client"] }
 glob = "0.3.1"
 image = { version = "0.25.4", default-features = false, features = ["png", "jpeg"]}
