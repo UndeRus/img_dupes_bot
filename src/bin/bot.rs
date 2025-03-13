@@ -1,19 +1,12 @@
-use std::{
-    ffi::OsStr,
-    io::Cursor,
-    path::PathBuf,
-    sync::Arc,
-};
-
+use std::{ffi::OsStr, io::Cursor, path::PathBuf, sync::Arc};
 
 use dotenvy::dotenv;
-use dotenvy_macro::dotenv;
 use frankenstein::{
-    AsyncApi, AsyncTelegramApi, File, GetFileParams, GetUpdatesParams, Message, MethodResponse,
-    ReplyParameters, SendMessageParams, UpdateContent,
+    client_reqwest::Bot, AsyncTelegramApi, File, GetFileParams, GetUpdatesParams, Message,
+    MethodResponse, ReplyParameters, SendMessageParams, UpdateContent,
 };
 
-use img_hashing_bot::{hasher::Indexer, tracing_setup::init_tracing};
+use img_hashing_bot::{hasher::Indexer, metrics, tracing_setup::init_tracing};
 use reqwest::Response;
 use tokio::{fs, signal, sync::Mutex};
 
@@ -24,11 +17,14 @@ const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not foun
 async fn main() -> Result<(), ()> {
     dotenv().ok();
 
-    let finisher = init_tracing(dotenv!("OTLP_ENDPOINT"), dotenv!("OTLP_TOKEN"));
+    let finisher = init_tracing(
+        &dotenvy::var("OTLP_ENDPOINT").unwrap(),
+        &dotenvy::var("OTLP_TOKEN").unwrap(),
+    );
     let indexer = Arc::new(Mutex::new(Indexer::new()));
 
-    let bot_api_token = dotenv!("TELEGRAM_BOT_API_TOKEN");
-    let api = AsyncApi::new(bot_api_token);
+    let bot_api_token = &dotenvy::var("TELEGRAM_BOT_API_TOKEN").unwrap();
+    let api = Bot::new(bot_api_token);
     let files_endpoint = format!(
         "https://api.telegram.org/file/bot{bot_api_token}/",
         bot_api_token = bot_api_token
@@ -90,7 +86,7 @@ async fn main() -> Result<(), ()> {
 )]
 async fn process_message(
     message: Message,
-    api: AsyncApi,
+    api: Bot,
     files_endpoint: &str,
     indexer: Arc<Mutex<Indexer>>,
 ) -> Result<(), ()> {
@@ -113,10 +109,15 @@ async fn process_message(
                     .is_file_processed_info(&response.result.file_unique_id)
                     .await;
 
+                if let Some(Ok(user_id)) = message.from.clone().map(|f| f.id.try_into()) {
+                    metrics::mtr_images_count(1, user_id);
+                }
+
                 //TODO: check this file already exists
                 if let Some(file_processed_info) = file_processed_info {
                     //TODO: return existing file info to chat
 
+                    metrics::mtr_samefiles_count(1);
                     tracing::info!("Found same file in db");
                     let reply_params = ReplyParameters::builder()
                         .message_id(file_processed_info.message_id as i32) // original message id
@@ -134,6 +135,7 @@ async fn process_message(
                         if let frankenstein::Error::Api(e) = e {
                             if e.description == REPLY_NOT_FOUND_ERROR {
                                 tracing::warn!("Reply not found, update existing record");
+                                metrics::mtr_removed_originals_count(1);
                                 let hash_record = file_processed_info;
                                 indexer
                                     .update_old_hash(
@@ -156,6 +158,10 @@ async fn process_message(
                     let file_response =
                         reqwest::get(format!("{}/{}", files_endpoint, file_path)).await;
                     if let Ok(file_response) = file_response {
+                        if let Some(size) = response.result.file_size {
+                            metrics::mtr_image_size(size, message.chat.id);
+                        }
+
                         let destination_path =
                             save_file(&file_path, &response, file_response).await?;
 
@@ -175,6 +181,11 @@ async fn process_message(
 
                             // notify to chat
                             let found_result_in_chat = result.first().ok_or(())?;
+
+                            if let Some(Ok(user_id)) = message.from.map(|f|f.id.try_into()) {
+                                metrics::mtr_duplicate_count(1, message.chat.id, user_id);
+                            }
+
                             let reply_params = ReplyParameters::builder()
                                 .message_id(found_result_in_chat.message_id as i32) // original message id
                                 .build();

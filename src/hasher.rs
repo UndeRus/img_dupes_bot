@@ -9,8 +9,7 @@ use image_hasher::{HashAlg, Hasher, HasherConfig};
 use tokio::sync::Mutex;
 
 use crate::{
-    db, delete_old_hash, file_storage::LocalFileStorage, find_image_by_unique_file_id,
-    find_similar_hashes, move_old_hash_to_new, HashRecord,
+    db, delete_old_hash, file_storage::LocalFileStorage, find_image_by_unique_file_id, find_similar_hashes, metrics, move_old_hash_to_new, HashRecord
 };
 
 const PERCEPTIVE_HASH_TOLERANCE: usize = 5;
@@ -56,13 +55,21 @@ impl Indexer {
 
     pub async fn is_file_processed_info(&self, file_id: &str) -> Option<HashRecord> {
         let db = self.db.lock().await;
-        find_image_by_unique_file_id(&db, file_id)
+        let send_metric = metrics::mtr_is_file_processed_info_query_time();
+        let result = find_image_by_unique_file_id(&db, file_id);
+        send_metric();
+        result
     }
 
     pub fn hash_image(&self, img: &DynamicImage) -> (String, String, String) {
+        let send_metric = metrics::mtr_message_hashing_time();
+
         let hash_landscape = self.hasher_landscape.hash_image(img).to_base64();
         let hash_portrait = self.hasher_portrait.hash_image(img).to_base64();
         let hash_square = self.hasher_square.hash_image(img).to_base64();
+
+        send_metric();
+
         (hash_landscape, hash_portrait, hash_square)
     }
 
@@ -72,6 +79,7 @@ impl Indexer {
         chat_id: i64,
     ) -> Vec<HashRecord> {
         let db = self.db.lock().await;
+        let send_mtr = metrics::mtr_find_similar_hashes_time();
 
         let current_timestamp = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -93,6 +101,10 @@ impl Indexer {
             })
             .flatten()
             .collect();
+
+        // Send metrics
+        send_mtr();
+
         results
     }
 

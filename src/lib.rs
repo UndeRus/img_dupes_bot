@@ -9,6 +9,7 @@ pub mod db;
 mod file_storage;
 pub mod hasher;
 pub mod tracing_setup;
+pub mod metrics;
 
 fn hamming_distance(hash1: &str, hash2: &str) -> Result<u32, ()> {
     let hash1: ImageHash<Box<[u8]>> = ImageHash::from_base64(hash1).map_err(|_| ())?;

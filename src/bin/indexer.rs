@@ -34,15 +34,15 @@ fn main() {
             let hash_square = hasher_square.hash_image(&img).to_base64();
             //println!("Hash of {} is {}", file, hash);
             let db = db.lock().unwrap();
-            db.execute(
+            let _ = db.execute(
                 r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,
                 rusqlite::params![file, "landscape", hash_landscape],
             );
-            db.execute(
+            let _ = db.execute(
                 r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,
                 rusqlite::params![file, "portrait", hash_portrait],
             );
-            db.execute(
+            let _ = db.execute(
                 r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,
                 rusqlite::params![file, "square", hash_square],
             );
@@ -61,7 +61,7 @@ fn read_files() -> Vec<String> {
                 //println!("{:?}", path.display());
                 result.push(path.display().to_string());
             }
-            Err(e) => {
+            Err(_e) => {
                 //println!("{:?}", e)
             }
         }
