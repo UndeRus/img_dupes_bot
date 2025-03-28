@@ -7,8 +7,9 @@ use opentelemetry_sdk::{
     Resource,
 };
 use tonic::metadata::MetadataMap;
+use tracing::Level;
 use tracing_opentelemetry::OpenTelemetryLayer;
-use tracing_subscriber::{layer::SubscriberExt, EnvFilter, Registry};
+use tracing_subscriber::{filter, fmt, layer::SubscriberExt, EnvFilter, Layer, Registry};
 
 fn metadata(auth_token: &str) -> MetadataMap {
     let mut metadata = MetadataMap::with_capacity(3);
@@ -37,9 +38,13 @@ fn init_tracing_subscriber(tracer: Tracer) {
 
     let opentelemetry_layer = OpenTelemetryLayer::new(tracer);
 
+
+    let stdout_layer = fmt::layer().with_level(true).with_filter(filter::LevelFilter::from_level(Level::DEBUG));
+
     let subscriber = Registry::default()
         .with(filter_otel)
-        .with(opentelemetry_layer);
+        .with(opentelemetry_layer)
+        .with(stdout_layer);
     tracing::subscriber::set_global_default(subscriber).expect("Setting tracing subscriber failed");
 }
 

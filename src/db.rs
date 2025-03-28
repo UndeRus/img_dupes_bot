@@ -20,11 +20,29 @@ pub fn create_db() -> Result<Connection, ()> {
 
     -- Index on hash_data to speed up searches (optional but recommended for large datasets)
     CREATE INDEX idx_hash_data ON hashes(hash_data);
+
+    /*
+    CREATE TABLE IF NOT EXISTS votings (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        chat_id INTEGER NOT NULL,
+        message_id INTEGER NOT NULL
+        original_message_id INTEGER NOT NULL,
+        UNIQUE(id)
+    );
+
+    CREATE TABLE IF NOT EXISTS votes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        voting_id INTEGER NOT NULL,
+        vote_type INTEGER NOT NULL,
+        user_id INTEGER NOT NULL,
+        username TEXT NOT NULL
+    );
+    */
         "#,
         [],
     )
     .map_err(|e| {
-        eprintln!("Create error {}", e);
+        eprintln!("Create db error {}", e);
         ()
     })?;
     Ok(conn)

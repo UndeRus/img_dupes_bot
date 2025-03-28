@@ -9,7 +9,7 @@ use image_hasher::{HashAlg, Hasher, HasherConfig};
 use tokio::sync::Mutex;
 
 use crate::{
-    db, delete_old_hash, file_storage::LocalFileStorage, find_image_by_unique_file_id, find_similar_hashes, metrics, move_old_hash_to_new, HashRecord
+    db, delete_old_hash, file_storage::S3FileStorage, find_image_by_unique_file_id, find_similar_hashes, metrics, move_old_hash_to_new, HashRecord
 };
 
 const PERCEPTIVE_HASH_TOLERANCE: usize = 5;
@@ -20,7 +20,6 @@ pub struct Indexer {
     hasher_portrait: Hasher,
     hasher_square: Hasher,
     db: Arc<Mutex<rusqlite::Connection>>,
-    file_storage: LocalFileStorage, //TODO: extract file operations
 }
 
 impl Indexer {
@@ -42,14 +41,11 @@ impl Indexer {
 
         let db = Arc::new(Mutex::new(db::create_db().unwrap()));
 
-        let file_storage = LocalFileStorage {};
-
         Self {
             hasher_landscape,
             hasher_portrait,
             hasher_square,
             db,
-            file_storage,
         }
     }
 
@@ -61,6 +57,7 @@ impl Indexer {
         result
     }
 
+    #[tracing::instrument(skip(self))]
     pub fn hash_image(&self, img: &DynamicImage) -> (String, String, String) {
         let send_metric = metrics::mtr_message_hashing_time();
 
