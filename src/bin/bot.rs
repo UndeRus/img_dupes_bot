@@ -1,9 +1,9 @@
-use std::{ffi::OsStr, io::Cursor, ops::Deref, path::PathBuf, str::FromStr, sync::Arc};
+use std::{ffi::OsStr, ops::Deref, str::FromStr, sync::Arc};
 
 use dotenvy::dotenv;
 use frankenstein::{
     client_reqwest::Bot, AnswerCallbackQueryParams, AsyncTelegramApi, CallbackQuery,
-    EditMessageTextParams, ErrorResponse, File, GetFileParams, GetUpdatesParams,
+    EditMessageTextParams, File, GetFileParams, GetUpdatesParams,
     InlineKeyboardButton, InlineKeyboardMarkup, Message, MethodResponse, ReplyMarkup,
     ReplyParameters, SendMessageParams, UpdateContent, User,
 };
@@ -118,7 +118,7 @@ async fn process_message<T: FileStorage>(
     storage: Arc<Mutex<T>>,
 ) -> Result<(), anyhow::Error> {
     // Skip all replies
-    if let Some(_) = message.reply_to_message {
+    if message.reply_to_message.is_some() {
         tracing::info!("This is reply, ignore");
         return Ok(());
     }
@@ -180,7 +180,7 @@ async fn process_message<T: FileStorage>(
             if let Ok(file_uri) = download_file_from_tg(
                 &file_path,
                 &response.file_unique_id,
-                &files_endpoint,
+                files_endpoint,
                 storage.deref(),
             )
             .await
@@ -319,7 +319,7 @@ fn is_message_removed(error: &frankenstein::Error) -> bool {
             return true;
         }
     }
-    return false;
+    false
 }
 
 fn get_filename(file_path: &str, file_unique_id: &str) -> String {
@@ -334,7 +334,7 @@ fn get_filename(file_path: &str, file_unique_id: &str) -> String {
         path = file_unique_id,
         extension = extension
     );
-    return destination_path_str;
+    destination_path_str
 }
 
 #[tracing::instrument(name = "Send message to chat", skip(api))]
@@ -380,9 +380,9 @@ fn build_keyboard(chat_id: i64, message_id: i32) -> ReplyMarkup {
         .inline_keyboard(keyboard)
         .build();
 
-    let keyboard_markup = ReplyMarkup::InlineKeyboardMarkup(inline_keyboard);
+    
 
-    keyboard_markup
+    ReplyMarkup::InlineKeyboardMarkup(inline_keyboard)
 }
 
 #[tracing::instrument(name = "Process inline query", skip(api))]
@@ -421,7 +421,7 @@ async fn process_callback(api: &Bot, query: CallbackQuery) -> Result<(), anyhow:
     match callback_data.command {
         CallbackQueryCommand::WRONG => {
             if let Err(e) = process_wrong_callback(
-                &api,
+                api,
                 callback_data.args[0],
                 callback_data.args[1] as i32,
                 message_id,
@@ -483,11 +483,11 @@ fn build_vote_keyboard(chat_id: i64, message_id: i32) -> InlineKeyboardMarkup {
 
     keyboard.push(row);
 
-    let inline_keyboard = InlineKeyboardMarkup::builder()
-        .inline_keyboard(keyboard)
-        .build();
+    
 
-    inline_keyboard
+    InlineKeyboardMarkup::builder()
+        .inline_keyboard(keyboard)
+        .build()
 }
 
 async fn process_ignore_callback() {

@@ -49,7 +49,7 @@ fn init_tracing_subscriber(tracer: Tracer) {
     tracing::subscriber::set_global_default(subscriber).expect("Setting tracing subscriber failed");
 }
 
-pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() -> () {
+pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() {
     // To send traces to jaeger
     let trace_exporter = SpanExporter::builder()
         .with_tonic()
@@ -83,12 +83,12 @@ pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() -> () {
 
     global::set_meter_provider(metrics_provider.clone());
 
-    return Box::new(move || {
+    Box::new(move || {
         tracer_provider
             .shutdown()
             .expect("Failed to shutdown tracer");
         metrics_provider
             .shutdown()
             .expect("Failed to shutdown metrics");
-    });
+    })
 }

@@ -15,7 +15,7 @@ pub mod tracing_setup;
 fn hamming_distance(hash1: &str, hash2: &str) -> Result<u32, ()> {
     let hash1: ImageHash<Box<[u8]>> = ImageHash::from_base64(hash1).map_err(|_| ())?;
     let hash2 = ImageHash::from_base64(hash2).map_err(|_| ())?;
-    return Ok(hash1.dist(&hash2));
+    Ok(hash1.dist(&hash2))
 }
 
 #[derive(Debug)]

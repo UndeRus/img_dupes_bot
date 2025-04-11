@@ -47,8 +47,8 @@ impl FromStr for CallbackQueryData {
             args.push(arg);
         }
         Ok(CallbackQueryData {
-            command: command,
-            args: args,
+            command,
+            args,
         })
     }
 }

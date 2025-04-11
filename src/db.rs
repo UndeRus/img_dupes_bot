@@ -43,7 +43,7 @@ pub fn create_db() -> Result<Connection, ()> {
     )
     .map_err(|e| {
         eprintln!("Create db error {}", e);
-        ()
+        
     })?;
     Ok(conn)
 }

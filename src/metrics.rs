@@ -2,21 +2,21 @@ use opentelemetry::{global, metrics::Meter, KeyValue};
 use quanta::Clock;
 
 fn meter() -> Meter {
-    let meter = global::meter("img dupes tgbot");
-    return meter;
+    
+    global::meter("img dupes tgbot")
 }
 
-fn mtr_exec_time(name: &'static str) -> impl Fn() -> () {
+fn mtr_exec_time(name: &'static str) -> impl Fn() {
     let clock = Clock::new();
     let now = clock.now();
     let time_metric = meter().u64_gauge(name).build();
-    return move || {
+    move || {
         let duration = clock.now().duration_since(now);
         time_metric.record(
             duration.as_millis().try_into().unwrap_or(u64::max_value()),
             &[],
         );
-    };
+    }
 }
 
 fn mtr_count(name: &'static str, count: u64) {
@@ -29,7 +29,7 @@ fn mtr_value(name: &'static str, value: u64) {
     count_metric.record(value, &[]);
 }
 
-pub fn mtr_find_similar_hashes_time() -> impl Fn() -> () {
+pub fn mtr_find_similar_hashes_time() -> impl Fn() {
     mtr_exec_time("find_similar_hashes_time")
 }
 
@@ -51,11 +51,11 @@ pub fn mtr_image_size(size: u64, chat_id: i64) {
     count_metric.record(size, &[KeyValue::new("chat_id", chat_id)]);
 }
 
-pub fn mtr_message_hashing_time() -> impl Fn() -> () {
+pub fn mtr_message_hashing_time() -> impl Fn() {
     mtr_exec_time("message_hashing_time")
 }
 
-pub fn mtr_is_file_processed_info_query_time() -> impl Fn() -> () {
+pub fn mtr_is_file_processed_info_query_time() -> impl Fn() {
     mtr_exec_time("is_file_processed_info_query_time")
 }
 

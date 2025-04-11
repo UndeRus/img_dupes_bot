@@ -23,6 +23,12 @@ pub struct Indexer {
     db: Arc<Mutex<rusqlite::Connection>>,
 }
 
+impl Default for Indexer {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Indexer {
     pub fn new() -> Self {
         let hash_landscape_config = HasherConfig::new()
@@ -90,7 +96,7 @@ impl Indexer {
             .filter_map(|hash_str| {
                 let result = find_similar_hashes(
                     &db,
-                    &hash_str,
+                    hash_str,
                     PERCEPTIVE_HASH_TOLERANCE,
                     chat_id,
                     from_timestamp,
@@ -119,7 +125,7 @@ impl Indexer {
 
         let tx = db.transaction().map_err(|e| {
             tracing::error!("Transaction error {}", e);
-            ()
+            
         })?;
         {
             let mut prepared_st = tx
@@ -128,7 +134,7 @@ impl Indexer {
                 )
                 .map_err(|e| {
                     tracing::error!("Compile statement error {}", e);
-                    ()
+                    
                 })?;
 
             let now = SystemTime::now()
@@ -148,7 +154,7 @@ impl Indexer {
                 ])
                 .map_err(|e| {
                     tracing::error!("Insert landscape error {}", e);
-                    ()
+                    
                 })?;
 
             prepared_st
@@ -163,7 +169,7 @@ impl Indexer {
                 ])
                 .map_err(|e| {
                     tracing::error!("Insert portrait error {}", e);
-                    ()
+                    
                 })?;
 
             prepared_st
@@ -178,13 +184,13 @@ impl Indexer {
                 ])
                 .map_err(|e| {
                     tracing::error!("Transaction error {}", e);
-                    ()
+                    
                 })?;
         }
 
         tx.commit().map_err(|e| {
             tracing::error!("Transaction error {}", e);
-            ()
+            
         })?;
         Ok(())
     }
