@@ -5,12 +5,12 @@ use rusqlite::{
     Connection, Result,
 };
 
-pub mod db;
-pub mod file_storage;
-pub mod hasher;
-pub mod tracing_setup;
-pub mod metrics;
 pub mod data;
+pub mod db;
+pub mod hasher;
+pub mod metrics;
+pub mod storage;
+pub mod tracing_setup;
 
 fn hamming_distance(hash1: &str, hash2: &str) -> Result<u32, ()> {
     let hash1: ImageHash<Box<[u8]>> = ImageHash::from_base64(hash1).map_err(|_| ())?;
@@ -26,6 +26,7 @@ pub struct HashRecord {
     file_id: String,
     pub chat_id: i64,    // group chat id
     pub message_id: i64, // single message id
+    pub media_group_id: Option<String>,
 }
 
 #[inline]
@@ -58,6 +59,7 @@ pub fn find_image_by_unique_file_id(conn: &Connection, unique_file_id: &str) -> 
         file_id: row.get(3).unwrap_or_default(),
         chat_id: row.get(4).unwrap_or_default(),
         message_id: row.get(5).unwrap_or_default(),
+        media_group_id: None,
     })
 }
 
@@ -109,6 +111,7 @@ pub fn find_similar_hashes(
             file_id: row.get(3).unwrap_or_default(),
             chat_id: row.get(4).unwrap_or_default(),
             message_id: row.get(5).unwrap_or_default(),
+            media_group_id: None, //TODO: add to schema
         });
     }
 

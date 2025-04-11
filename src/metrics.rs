@@ -12,8 +12,10 @@ fn mtr_exec_time(name: &'static str) -> impl Fn() -> () {
     let time_metric = meter().u64_gauge(name).build();
     return move || {
         let duration = clock.now().duration_since(now);
-        time_metric.record(duration.as_millis().try_into().unwrap_or(u64::max_value()),
-        &[],);
+        time_metric.record(
+            duration.as_millis().try_into().unwrap_or(u64::max_value()),
+            &[],
+        );
     };
 }
 
@@ -59,5 +61,11 @@ pub fn mtr_is_file_processed_info_query_time() -> impl Fn() -> () {
 
 pub fn mtr_duplicate_count(count: u64, chat_id: i64, user_id: i64) {
     let count_metric = meter().u64_counter("duplicate_count").build();
-    count_metric.add(count, &[KeyValue::new("chat_id", chat_id), KeyValue::new("user_id", user_id)]);
+    count_metric.add(
+        count,
+        &[
+            KeyValue::new("chat_id", chat_id),
+            KeyValue::new("user_id", user_id),
+        ],
+    );
 }

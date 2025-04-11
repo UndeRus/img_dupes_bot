@@ -9,7 +9,8 @@ use image_hasher::{HashAlg, Hasher, HasherConfig};
 use tokio::sync::Mutex;
 
 use crate::{
-    db, delete_old_hash, file_storage::S3FileStorage, find_image_by_unique_file_id, find_similar_hashes, metrics, move_old_hash_to_new, HashRecord
+    db, delete_old_hash, find_image_by_unique_file_id, find_similar_hashes, metrics,
+    move_old_hash_to_new, HashRecord,
 };
 
 const PERCEPTIVE_HASH_TOLERANCE: usize = 5;
@@ -57,7 +58,7 @@ impl Indexer {
         result
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument("Calculate image hashes", skip(self, img))]
     pub fn hash_image(&self, img: &DynamicImage) -> (String, String, String) {
         let send_metric = metrics::mtr_message_hashing_time();
 
@@ -105,7 +106,7 @@ impl Indexer {
         results
     }
 
-    #[tracing::instrument(skip(self))]
+    #[tracing::instrument("Save image hashes to db", skip(self))]
     pub async fn save_to_index(
         &mut self,
         filename: &str,
@@ -193,6 +194,7 @@ impl Indexer {
         let _ = delete_old_hash(&db, hash_id);
     }
 
+    #[tracing::instrument(name = "Update existing hash", skip(self))]
     pub async fn update_old_hash(&mut self, hash_id: i32, chat_id: i64, message_id: i64) {
         let db = self.db.lock().await;
         if let Err(e) = move_old_hash_to_new(&db, hash_id, chat_id, message_id) {

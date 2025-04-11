@@ -38,8 +38,9 @@ fn init_tracing_subscriber(tracer: Tracer) {
 
     let opentelemetry_layer = OpenTelemetryLayer::new(tracer);
 
-
-    let stdout_layer = fmt::layer().with_level(true).with_filter(filter::LevelFilter::from_level(Level::DEBUG));
+    let stdout_layer = fmt::layer()
+        .with_level(true)
+        .with_filter(filter::LevelFilter::from_level(Level::DEBUG));
 
     let subscriber = Registry::default()
         .with(filter_otel)
@@ -59,7 +60,6 @@ pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() -> () {
 
     global::set_text_map_propagator(TraceContextPropagator::new());
 
-
     // To connect traces to exporter
     let tracer_provider = SdkTracerProvider::builder()
         .with_batch_exporter(trace_exporter)
@@ -68,7 +68,7 @@ pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() -> () {
     init_tracing_subscriber(tracer_provider.tracer("img dupes bot"));
 
     global::set_tracer_provider(tracer_provider.clone());
-    
+
     let metrics_exporter = MetricExporter::builder()
         .with_tonic()
         .with_endpoint(otlp_endpoint)
@@ -82,7 +82,6 @@ pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() -> () {
         .build();
 
     global::set_meter_provider(metrics_provider.clone());
-    
 
     return Box::new(move || {
         tracer_provider

@@ -32,7 +32,6 @@ fn main() {
             let hash_landscape = hasher_landscape.hash_image(&img).to_base64();
             let hash_portrait = hasher_portrait.hash_image(&img).to_base64();
             let hash_square = hasher_square.hash_image(&img).to_base64();
-            //println!("Hash of {} is {}", file, hash);
             let db = db.lock().unwrap();
             let _ = db.execute(
                 r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,

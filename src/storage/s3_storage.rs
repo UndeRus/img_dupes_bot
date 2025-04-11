@@ -3,25 +3,7 @@ use image::DynamicImage;
 use s3::{creds::Credentials, error::S3Error, Bucket, Region};
 use url::Url;
 
-pub trait FileStorage {
-    async fn save_file(&self, url: &str, filename: &str) -> Result<String, anyhow::Error>;
-    async fn load_file(&self, url: &str) -> Result<DynamicImage, anyhow::Error>;
-    async fn remove_file(&self, url: &str) -> Result<(), anyhow::Error>;
-}
-
-/*
-pub struct LocalFileStorage {}
-
-impl FileStorage for LocalFileStorage {
-    fn save_file() {
-        todo!()
-    }
-
-    fn load_file(url: &str) {
-
-    }
-}
-*/
+use super::FileStorage;
 
 pub struct S3FileStorage {
     endpoint: String,
@@ -41,15 +23,7 @@ fn get_bucket(
         endpoint: endpoint.to_owned(),
     };
 
-    let credentials = Credentials::new(
-        // Some("GxETY0nixTfpRyXvpsdJ"),
-        // Some("CnjH4H6hEFIqsDBTyis0x9WFA6N9y7UPEMHJZBuQ"),
-        Some(access_key),
-        Some(secret_key),
-        None,
-        None,
-        None,
-    )?;
+    let credentials = Credentials::new(Some(access_key), Some(secret_key), None, None, None)?;
 
     let bucket = Bucket::new(bucket_name, region, credentials)?.with_path_style();
     Ok(bucket)
@@ -57,7 +31,6 @@ fn get_bucket(
 
 impl S3FileStorage {
     pub fn new(s3_endpoint: &str, bucket_name: &str, access_key: &str, secret_key: &str) -> Self {
-        //"http://localhost:9000"
         Self {
             access_key: access_key.to_owned(),
             secret_key: secret_key.to_owned(),
@@ -69,6 +42,7 @@ impl S3FileStorage {
 
 impl FileStorage for S3FileStorage {
     #[tracing::instrument(
+        "Save file to S3 storage"
         skip(self)
     )]
     async fn save_file(&self, url: &str, filename: &str) -> Result<String, anyhow::Error> {
@@ -86,8 +60,11 @@ impl FileStorage for S3FileStorage {
         Ok(format!("s3://{}/{}", &self.bucket_name, filename))
     }
 
+    #[tracing::instrument(
+        "Load file from S3 storage"
+        skip(self)
+    )]
     async fn load_file(&self, url: &str) -> Result<DynamicImage, anyhow::Error> {
-        //TODO: parse uri
         let s3_url = Url::parse(url)?;
 
         if s3_url.scheme() != "s3" {
@@ -96,8 +73,8 @@ impl FileStorage for S3FileStorage {
 
         let bucket_name = s3_url
             .host_str()
-            .ok_or(anyhow::format_err!("Failed to parse bucket"))?; //bucket
-        let filename = s3_url.path(); // filename
+            .ok_or(anyhow::format_err!("Failed to parse bucket"))?;
+        let filename = s3_url.path();
 
         let bucket = get_bucket(
             &self.endpoint,
@@ -114,11 +91,13 @@ impl FileStorage for S3FileStorage {
 
         let image_result = image::load_from_memory(bucket_result.bytes())
             .map_err(|e| anyhow::format_err!("Failed to load image: {}", e))?;
-        //TODO: return image
         Ok(image_result)
     }
 
-
+    #[tracing::instrument(
+        "Remove file from S3 storage"
+        skip(self)
+    )]
     async fn remove_file(&self, url: &str) -> Result<(), anyhow::Error> {
         let s3_url = Url::parse(url)?;
 
@@ -128,8 +107,8 @@ impl FileStorage for S3FileStorage {
 
         let bucket_name = s3_url
             .host_str()
-            .ok_or(anyhow::format_err!("Failed to parse bucket"))?; //bucket
-        let filename = s3_url.path(); // filename
+            .ok_or(anyhow::format_err!("Failed to parse bucket"))?;
+        let filename = s3_url.path();
 
         let bucket = get_bucket(
             &self.endpoint,
@@ -139,7 +118,10 @@ impl FileStorage for S3FileStorage {
         )
         .map_err(|e| anyhow::format_err!("Failed to open bucket: {}", e))?;
 
-        bucket.delete_object(filename).await.map_err(|e| anyhow::format_err!("Failed to remove file: {}", e))?;
+        bucket
+            .delete_object(filename)
+            .await
+            .map_err(|e| anyhow::format_err!("Failed to remove file: {}", e))?;
 
         Ok(())
     }
