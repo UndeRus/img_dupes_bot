@@ -15,20 +15,35 @@ use img_hashing_bot::{
     storage::{s3_storage::S3FileStorage, FileStorage},
     tracing_setup::init_tracing,
 };
+use migration::sea_orm::{sqlx::{sqlite::SqliteConnectOptions, SqlitePool}, SqlxSqliteConnector};
 use tokio::{signal, sync::Mutex};
 
 const MESSAGE_FOUND_MSG: &str = "Эту картинку уже постили тут:";
 const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not found";
 
+
+async fn apply_migrations(db_path: &str) {
+    use migration::{Migrator, MigratorTrait};
+    let opts = SqliteConnectOptions::new().filename(db_path).create_if_missing(true);
+
+    let pool = SqlitePool::connect_with(opts).await.expect("Failed to connect to apply migrations");
+    let db = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
+    Migrator::up(&db, None).await.expect("Failed to apply transactions");
+}
+
 #[tokio::main]
 async fn main() -> Result<(), ()> {
     dotenv().ok();
+
+    let db_path = "./hashes.db";
+
+    apply_migrations(db_path).await;
 
     let finisher = init_tracing(
         &dotenvy::var("OTLP_ENDPOINT").expect("Failed to find env var"),
         &dotenvy::var("OTLP_TOKEN").expect("Failed to find env var"),
     );
-    let indexer = Arc::new(Mutex::new(Indexer::new()));
+    let indexer = Arc::new(Mutex::new(Indexer::new(db_path)));
 
     let s3_endpoint = &dotenvy::var("S3_ENDPOINT").expect("Failed to find env var");
     let s3_bucket = &dotenvy::var("S3_BUCKET").expect("Failed to find env var");
@@ -263,6 +278,7 @@ async fn process_message<T: FileStorage>(
                             message.chat.id,
                             message.message_id as i64,
                             &response.file_unique_id,
+                            message.media_group_id,
                             (&hash_landscape, &hash_portrait, &hash_square),
                         )
                         .await
@@ -270,6 +286,8 @@ async fn process_message<T: FileStorage>(
                         tracing::error!("Failed to index image {:?}", e);
                     }
                 }
+            } else {
+                tracing::error!("Failed to upload image to S3");
             }
         }
     } else {

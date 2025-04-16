@@ -25,12 +25,12 @@ pub struct Indexer {
 
 impl Default for Indexer {
     fn default() -> Self {
-        Self::new()
+        Self::new("hashes.db")
     }
 }
 
 impl Indexer {
-    pub fn new() -> Self {
+    pub fn new(db_path: &str) -> Self {
         let hash_landscape_config = HasherConfig::new()
             .hash_size(15, 10)
             .hash_alg(HashAlg::Blockhash);
@@ -46,7 +46,7 @@ impl Indexer {
             .hash_alg(HashAlg::Blockhash);
         let hasher_square = hash_square_config.to_hasher();
 
-        let db = Arc::new(Mutex::new(db::create_db().unwrap()));
+        let db = Arc::new(Mutex::new(db::create_db(db_path).expect("Failed to open db")));
 
         Self {
             hasher_landscape,
@@ -119,6 +119,7 @@ impl Indexer {
         chat_id: i64,
         message_id: i64,
         file_id: &str,
+        media_group_id: Option<String>,
         (hash_landscape, hash_portrait, hash_square): (&str, &str, &str),
     ) -> Result<(), ()> {
         let mut db = self.db.lock().await;
@@ -130,7 +131,7 @@ impl Indexer {
         {
             let mut prepared_st = tx
                 .prepare(
-                    r#"INSERT INTO hashes(filename, orientation, base64_hash, chat_id, message_id, file_id, created_at) VALUES(?, ?, ?, ?, ?, ?, ?)"#,
+                    r#"INSERT INTO hashes(filename, orientation, base64_hash, chat_id, message_id, file_id, created_at, media_group_id) VALUES(?, ?, ?, ?, ?, ?, ?, ?)"#,
                 )
                 .map_err(|e| {
                     tracing::error!("Compile statement error {}", e);
@@ -142,6 +143,8 @@ impl Indexer {
                 .expect("Time went backwards")
                 .as_secs();
 
+            let media_group_id = media_group_id.unwrap_or("".to_owned());
+
             prepared_st
                 .execute(rusqlite::params![
                     filename,
@@ -150,11 +153,11 @@ impl Indexer {
                     chat_id,
                     message_id,
                     file_id,
-                    now
+                    now,
+                    media_group_id,
                 ])
                 .map_err(|e| {
                     tracing::error!("Insert landscape error {}", e);
-                    
                 })?;
 
             prepared_st
@@ -165,11 +168,11 @@ impl Indexer {
                     chat_id,
                     message_id,
                     file_id,
-                    now
+                    now,
+                    media_group_id,
                 ])
                 .map_err(|e| {
                     tracing::error!("Insert portrait error {}", e);
-                    
                 })?;
 
             prepared_st
@@ -180,17 +183,16 @@ impl Indexer {
                     chat_id,
                     message_id,
                     file_id,
-                    now
+                    now,
+                    media_group_id,
                 ])
                 .map_err(|e| {
                     tracing::error!("Transaction error {}", e);
-                    
                 })?;
         }
 
         tx.commit().map_err(|e| {
             tracing::error!("Transaction error {}", e);
-            
         })?;
         Ok(())
     }

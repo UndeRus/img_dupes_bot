@@ -1633,6 +1633,7 @@ dependencies = [
  "image",
  "image_hasher",
  "log",
+ "migration",
  "opentelemetry",
  "opentelemetry-appender-tracing",
  "opentelemetry-otlp",

@@ -7,7 +7,7 @@ use img_hashing_bot::db;
 use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 
 fn main() {
-    let db = Arc::new(Mutex::new(db::create_db().unwrap()));
+    let db = Arc::new(Mutex::new(db::create_db("hashes.db").expect("Failed to open db")));
 
     let files = read_files();
 

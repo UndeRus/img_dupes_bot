@@ -1,7 +1,4 @@
-use image_hasher::ImageHash;
-
 use rusqlite::{
-    functions::{Context, FunctionFlags},
     Connection, Result,
 };
 
@@ -11,12 +8,6 @@ pub mod hasher;
 pub mod metrics;
 pub mod storage;
 pub mod tracing_setup;
-
-fn hamming_distance(hash1: &str, hash2: &str) -> Result<u32, ()> {
-    let hash1: ImageHash<Box<[u8]>> = ImageHash::from_base64(hash1).map_err(|_| ())?;
-    let hash2 = ImageHash::from_base64(hash2).map_err(|_| ())?;
-    Ok(hash1.dist(&hash2))
-}
 
 #[derive(Debug)]
 pub struct HashRecord {
@@ -29,14 +20,6 @@ pub struct HashRecord {
     pub media_group_id: Option<String>,
 }
 
-#[inline]
-fn hamming_sqlite_func(ctx: &Context) -> Result<i64, rusqlite::Error> {
-    let hash1: String = ctx.get(0)?;
-    let hash2: String = ctx.get(1)?;
-    let dist = hamming_distance(&hash1, &hash2);
-    dist.map_err(|_| rusqlite::Error::InvalidQuery)
-        .map(|x| x as i64)
-}
 
 pub fn find_image_by_unique_file_id(conn: &Connection, unique_file_id: &str) -> Option<HashRecord> {
     let mut stmt = conn.prepare(
@@ -70,25 +53,8 @@ pub fn find_similar_hashes(
     chat_id: i64,
     from_timestamp: u64,
 ) -> Result<Vec<HashRecord>> {
-    // Decode input hash to binary
-    //let input_bytes = decode_base64_hash(input_hash);
-
-    // Register custom Hamming distance function
-    conn.create_scalar_function(
-        "hamming_distance",
-        2,
-        FunctionFlags::all(),
-        move |ctx: &Context| {
-            hamming_sqlite_func(ctx)
-            //Ok(dist as i64)
-        },
-    )
-    .map_err(|e| {
-        eprintln!("Failed to register function {}", e);
-        e
-    })?;
     let mut stmt = conn.prepare(
-        "SELECT id, filename, base64_hash, file_id, chat_id, message_id, hamming_distance(base64_hash, ?) as dist FROM hashes WHERE chat_id  = ? AND dist < ? AND created_at > ? ORDER by dist ASC",
+        "SELECT id, filename, base64_hash, file_id, chat_id, message_id, media_group_id, hamming_distance(base64_hash, ?) as dist FROM hashes WHERE chat_id  = ? AND dist < ? AND created_at > ? ORDER by dist ASC",
     ).map_err(|e|{
         eprint!("Failed to execute query to search similar {}", e);
         e
@@ -104,6 +70,9 @@ pub fn find_similar_hashes(
     // Collect results
     let mut similar_hashes = Vec::new();
     while let Some(row) = rows.next()? {
+        let media_group_id: Option<String> = row.get(6).unwrap_or(None);
+        let media_group_id = media_group_id.filter(|media_group_id| !media_group_id.trim().is_empty());
+
         similar_hashes.push(HashRecord {
             id: row.get(0).unwrap_or_default(),
             filename: row.get(1).unwrap_or_default(),
@@ -111,7 +80,7 @@ pub fn find_similar_hashes(
             file_id: row.get(3).unwrap_or_default(),
             chat_id: row.get(4).unwrap_or_default(),
             message_id: row.get(5).unwrap_or_default(),
-            media_group_id: None, //TODO: add to schema
+            media_group_id, //TODO: add to schema
         });
     }
 

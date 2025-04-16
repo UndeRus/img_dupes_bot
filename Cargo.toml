@@ -49,3 +49,4 @@ tracing = "0.1.41"
 tracing-opentelemetry = "0.29.0"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter", "registry", "std"] }
 url = "2.5.4"
+migration = { path = "./migration"}
