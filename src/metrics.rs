@@ -1,3 +1,5 @@
+use std::u64;
+
 use opentelemetry::{global, metrics::Meter, KeyValue};
 use quanta::Clock;
 
@@ -13,7 +15,7 @@ fn mtr_exec_time(name: &'static str) -> impl Fn() {
     move || {
         let duration = clock.now().duration_since(now);
         time_metric.record(
-            duration.as_millis().try_into().unwrap_or(u64::max_value()),
+            duration.as_millis().try_into().unwrap_or(u64::MAX),
             &[],
         );
     }

@@ -15,7 +15,7 @@ fn metadata(auth_token: &str) -> MetadataMap {
     let mut metadata = MetadataMap::with_capacity(3);
     metadata.insert(
         "authorization",
-        format!("Basic {}", auth_token).parse().unwrap(),
+        format!("Basic {auth_token}").parse().unwrap(),
     );
     metadata.insert("organization", "default".parse().unwrap());
     metadata.insert("stream-name", "default".parse().unwrap());

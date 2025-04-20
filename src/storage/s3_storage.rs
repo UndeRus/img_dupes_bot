@@ -30,6 +30,7 @@ fn get_bucket(
 }
 
 impl S3FileStorage {
+    #[must_use]
     pub fn new(s3_endpoint: &str, bucket_name: &str, access_key: &str, secret_key: &str) -> Self {
         Self {
             access_key: access_key.to_owned(),

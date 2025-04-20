@@ -29,7 +29,7 @@ pub fn find_image_by_unique_file_id(conn: &Connection, unique_file_id: &str) -> 
     let mut result = stmt
         .query(rusqlite::params![unique_file_id])
         .map_err(|e| {
-            eprint!("Select error {}", e);
+            eprint!("Select error {e}");
             e
         })
         .ok()?;
@@ -56,7 +56,7 @@ pub fn find_similar_hashes(
     let mut stmt = conn.prepare(
         "SELECT id, filename, base64_hash, file_id, chat_id, message_id, media_group_id, hamming_distance(base64_hash, ?) as dist FROM hashes WHERE chat_id  = ? AND dist < ? AND created_at > ? ORDER by dist ASC",
     ).map_err(|e|{
-        eprint!("Failed to execute query to search similar {}", e);
+        eprint!("Failed to execute query to search similar {e}");
         e
     })?;
 

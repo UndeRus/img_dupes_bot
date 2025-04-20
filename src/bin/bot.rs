@@ -59,10 +59,7 @@ async fn main() -> Result<(), ()> {
 
     let bot_api_token = &dotenvy::var("TELEGRAM_BOT_API_TOKEN").unwrap();
     let api = Bot::new(bot_api_token);
-    let files_endpoint = format!(
-        "https://api.telegram.org/file/bot{bot_api_token}/",
-        bot_api_token = bot_api_token
-    );
+    let files_endpoint = format!("https://api.telegram.org/file/bot{bot_api_token}/");
 
     let update_params_builder = GetUpdatesParams::builder();
     let mut update_params = update_params_builder.build();
@@ -85,8 +82,8 @@ async fn main() -> Result<(), ()> {
                                             if message.photo.is_none() {
                                                 return;
                                             }
-                                            if let Err(_) = process_message(message, api_clone, &files_endpoint, indexer, storage).await {
-                                                tracing::error!("Failed to start message processing");
+                                            if let Err(e) = process_message(message, api_clone, &files_endpoint, indexer, storage).await {
+                                                tracing::error!("Failed to start message processing: {e}");
                                             }
                                         });
 
@@ -103,7 +100,7 @@ async fn main() -> Result<(), ()> {
                                 _ => {
                                     tracing::info!("Other {:?}", update.content);
                                 }
-                            };
+                            }
                             update_params.offset = Some(i64::from(update.update_id) + 1);
                         }
                     }
@@ -267,7 +264,7 @@ async fn process_message<T: FileStorage>(
                             //remove hashed image if original removed
                             storage.remove_file(&file_uri).await?;
                         } else {
-                            tracing::error!("Failed to send message about same file id {}", e);
+                            tracing::error!("Failed to send message about same file id {e}");
                         }
                     }
                 } else {
@@ -283,7 +280,7 @@ async fn process_message<T: FileStorage>(
                         )
                         .await
                     {
-                        tracing::error!("Failed to index image {:?}", e);
+                        tracing::error!("Failed to index image {e:?}");
                     }
                 }
             } else {
@@ -312,7 +309,7 @@ async fn download_file_from_tg<T: FileStorage>(
     storage: &T,
 ) -> Result<String, anyhow::Error> {
     let destination_path_str = get_filename(file_path, file_id);
-    let tg_file_url = format!("{}/{}", files_endpoint, file_path);
+    let tg_file_url = format!("{files_endpoint}/{file_path}");
     let file_uri = storage
         .save_file(&tg_file_url, &destination_path_str)
         .await?;
@@ -382,13 +379,13 @@ fn build_keyboard(chat_id: i64, message_id: i32) -> ReplyMarkup {
     row.push(
         InlineKeyboardButton::builder()
             .text("😡 not dupe")
-            .callback_data(format!("wr {} {}", chat_id, message_id))
+            .callback_data(format!("wr {chat_id} {message_id}"))
             .build(),
     );
     row.push(
         InlineKeyboardButton::builder()
             .text("😑 ignore")
-            .callback_data(format!("ig {} {}", chat_id, message_id))
+            .callback_data(format!("ig {chat_id} {message_id}"))
             .build(),
     );
 
@@ -424,7 +421,7 @@ async fn process_callback(api: &Bot, query: CallbackQuery) -> Result<(), anyhow:
 
     let username = get_username(&query.from);
 
-    println!("callback data: {:?}", callback_data);
+    println!("callback data: {callback_data:?}");
 
     let maybe_message = query
         .message
@@ -441,14 +438,14 @@ async fn process_callback(api: &Bot, query: CallbackQuery) -> Result<(), anyhow:
             if let Err(e) = process_wrong_callback(
                 api,
                 callback_data.args[0],
-                callback_data.args[1] as i32,
+                i32::try_from(callback_data.args[1]).expect("Failed to cast chat id"),
                 message_id,
             )
             .await
             {
                 tracing::error!("Failed to update message: {}", e);
             } else {
-                tracing::info!("Message update sent")
+                tracing::info!("Message update sent");
             }
         }
         CallbackQueryCommand::IGNORE => {
@@ -489,13 +486,13 @@ fn build_vote_keyboard(chat_id: i64, message_id: i32) -> InlineKeyboardMarkup {
     row.push(
         InlineKeyboardButton::builder()
             .text("👍")
-            .callback_data(format!("pro {} {}", chat_id, message_id))
+            .callback_data(format!("pro {chat_id} {message_id}"))
             .build(),
     );
     row.push(
         InlineKeyboardButton::builder()
             .text("👎")
-            .callback_data(format!("con {} {}", chat_id, message_id))
+            .callback_data(format!("con {chat_id} {message_id}"))
             .build(),
     );
 

@@ -34,15 +34,15 @@ fn main() {
             let hash_square = hasher_square.hash_image(&img).to_base64();
             let db = db.lock().unwrap();
             let _ = db.execute(
-                r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,
+                r"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)",
                 rusqlite::params![file, "landscape", hash_landscape],
             );
             let _ = db.execute(
-                r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,
+                r"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)",
                 rusqlite::params![file, "portrait", hash_portrait],
             );
             let _ = db.execute(
-                r#"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)"#,
+                r"INSERT INTO hashes(filename, orientation, base64_hash) VALUES(?, ?, ?)",
                 rusqlite::params![file, "square", hash_square],
             );
         }
