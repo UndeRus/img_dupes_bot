@@ -28,18 +28,6 @@ impl MigrationTrait for Migration {
                     .col(integer(Hashes::CreatedAt))
                     .to_owned(),
             )
-            .await?;
-
-        manager
-            .create_index(
-                Index::create()
-                    .name("unique-aspect-for-filename")
-                    .table(Hashes::Table)
-                    .col(Hashes::Filename)
-                    .col(Hashes::Orientation)
-                    .unique()
-                    .to_owned(),
-            )
             .await
     }
 
