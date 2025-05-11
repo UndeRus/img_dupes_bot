@@ -1,30 +1,27 @@
+use hasher::MIN_VOTES_COUNT;
+use models::{HashRecord, VoteType, VotingRecord, VotingType};
 use rusqlite::{
+    types::{FromSql, FromSqlResult, ValueRef},
     Connection, Result,
 };
 
 pub mod data;
 pub mod db;
 pub mod hasher;
+pub mod keyboards;
 pub mod metrics;
 pub mod storage;
+pub mod tg_callbacks;
 pub mod tracing_setup;
-
-#[derive(Debug)]
-pub struct HashRecord {
-    pub id: i32,
-    filename: String,
-    hash: String,
-    file_id: String,
-    pub chat_id: i64,    // group chat id
-    pub message_id: i64, // single message id
-    pub media_group_id: Option<String>,
-}
-
+mod models;
 
 pub fn find_image_by_unique_file_id(conn: &Connection, unique_file_id: &str) -> Option<HashRecord> {
     let mut stmt = conn.prepare(
-        "SELECT id, filename, base64_hash, file_id, chat_id, message_id FROM hashes file_id = ?",
-    ).ok()?;
+        "SELECT id, filename, base64_hash, file_id, chat_id, message_id FROM hashes WHERE file_id = ?",
+    ).map_err(|e|{
+        eprintln!("Failed to prepare statement {e}");
+        e
+    }).ok()?;
 
     let mut result = stmt
         .query(rusqlite::params![unique_file_id])
@@ -71,7 +68,8 @@ pub fn find_similar_hashes(
     let mut similar_hashes = Vec::new();
     while let Some(row) = rows.next()? {
         let media_group_id: Option<String> = row.get(6).unwrap_or(None);
-        let media_group_id = media_group_id.filter(|media_group_id| !media_group_id.trim().is_empty());
+        let media_group_id =
+            media_group_id.filter(|media_group_id| !media_group_id.trim().is_empty());
 
         similar_hashes.push(HashRecord {
             id: row.get(0).unwrap_or_default(),
@@ -114,4 +112,198 @@ pub fn move_old_hash_to_new(
         })?;
     tracing::info!("Hash records updated {}", result);
     Ok(())
+}
+
+pub fn create_voting(
+    conn: &Connection,
+    chat_id: i64,
+    message_id: i64,
+    original_message_id: i64,
+    voting_type: VotingType,
+) -> Result<i64, rusqlite::Error> {
+    let mut stmt = conn.prepare("INSERT INTO votings(chat_id, message_id, original_message_id, voting_type) VALUES(?, ?, ?, ?)")?;
+
+    stmt.execute(rusqlite::params![
+        chat_id,
+        message_id,
+        original_message_id,
+        voting_type.to_string()
+    ])
+    .map_err(|e| {
+        tracing::error!("Create voting error {e}");
+        e
+    })?;
+
+    tracing::info!("New voting created");
+    Ok(conn.last_insert_rowid())
+}
+
+pub fn create_vote(
+    db: &mut Connection,
+    voting_id: i64,
+    user_id: u64,
+    username: &str,
+    vote_type: VoteType,
+) -> Result<VoteResult, anyhow::Error> {
+    let tx = db.transaction().map_err(|e| {
+        tracing::error!("Transaction error {e}");
+        anyhow::format_err!("Transaction error {e}")
+    })?;
+
+    {
+        let mut vote_count_query = tx.prepare(
+            r"SELECT COUNT(vot.id) FROM votings vti JOIN votes vot ON vti.id = vot.voting_id WHERE vti.id = ?"
+        ).map_err(|e| {
+            tracing::error!("Compile statement error {}", e);
+            anyhow::format_err!("Compile statement error {e}")
+        })?;
+
+        let votes_count = vote_count_query
+            .query_row(rusqlite::params![voting_id], |row| row.get::<_, i64>(0))
+            .map_err(|e| {
+                tracing::error!("Vote count query error {}", e);
+                anyhow::format_err!("Vote count query error {e}")
+            })?;
+
+        // Vote finished
+        if votes_count >= MIN_VOTES_COUNT {
+            let voters = get_voting_names(&tx, voting_id)?;
+
+            let voting_result = get_voting_result(&tx, voting_id)?;
+
+            return Ok(VoteResult::Finished(voters, voting_result));
+        }
+
+        let mut insert_vote_stmt = tx
+            .prepare(
+                r"INSERT INTO votes(voting_id, user_id, username, vote_type) VALUES(?, ?, ?, ?)",
+            )
+            .map_err(|e| {
+                tracing::error!("Compile statement error {}", e);
+                anyhow::format_err!("Compile statement error {e}")
+            })?;
+
+        insert_vote_stmt
+            .execute(rusqlite::params![
+                voting_id,
+                user_id,
+                username,
+                Into::<i64>::into(vote_type)
+            ])
+            .map_err(|e| {
+                tracing::error!("Vote insert query error {}", e);
+                anyhow::format_err!("Vote insert query error {e}")
+            })?;
+
+        //let vote_id = tx.last_insert_rowid();
+
+        if votes_count + 1 >= MIN_VOTES_COUNT {
+            //TODO: update message, show votes result, then remove message
+            let voters = get_voting_names(&tx, voting_id)?;
+
+            let voting_result = get_voting_result(&tx, voting_id)?;
+
+            //TODO: get voting result
+
+            return Ok(VoteResult::Finished(voters, voting_result));
+        }
+
+        let voters = get_voting_names(&tx, voting_id)?;
+        Ok(VoteResult::InProgress(voters))
+    }
+}
+
+fn get_voting_names(conn: &Connection, voting_id: i64) -> Result<Vec<VoterName>, anyhow::Error> {
+    let mut voters_query = conn
+        .prepare(r"SELECT username FROM votes WHERE voting_id = ?")
+        .map_err(|e| {
+            tracing::error!("Compile statement error {}", e);
+            anyhow::format_err!("Compile statement error {e}")
+        })?;
+    let mut voters_result = voters_query
+        .query(rusqlite::params![voting_id])
+        .map_err(|e| {
+            tracing::error!("Voters names query error {}", e);
+            anyhow::format_err!("Voters names query error {e}")
+        })?;
+    let mut voters = vec![];
+    while let Ok(Some(voter_username_row)) = voters_result.next() {
+        if let Ok(username) = voter_username_row.get(0) {
+            voters.push(username);
+        }
+    }
+    Ok(voters)
+}
+
+fn get_voting_info(conn: &Connection, voting_id: i64) -> Result<VotingRecord, anyhow::Error> {
+    let mut voting_query = conn
+        .prepare(r"SELECT id, chat_id, message_id, voting_type FROM votings WHERE id = ?")
+        .map_err(|e| {
+            tracing::error!("Compile statement error {}", e);
+            anyhow::format_err!("Compile statement error {e}")
+        })?;
+    let mut voting_result = voting_query
+        .query(rusqlite::params![voting_id])
+        .map_err(|e| {
+            tracing::error!("Voting info query error {}", e);
+            anyhow::format_err!("Voting info query error {e}")
+        })?;
+    if let Ok(Some(row)) = voting_result.next() {
+        let id = row.get(0)?;
+        let chat_id = row.get(1)?;
+        let message_id = row.get(2)?;
+        let voting_type: VotingType = row.get(3)?;
+        Ok(VotingRecord {
+            id,
+            chat_id,
+            message_id,
+            voting_type,
+        })
+    } else {
+        Err(anyhow::format_err!("Failed to fetch row for voting info"))
+    }
+}
+
+fn get_voting_result(conn: &Connection, voting_id: i64) -> Result<VoteType, anyhow::Error> {
+    let mut voting_query = conn
+        .prepare(r"SELECT SUM(vote_type) FROM votes WHERE voting_id = ?")
+        .map_err(|e| {
+            tracing::error!("Compile statement error {}", e);
+            anyhow::format_err!("Compile statement error {e}")
+        })?;
+    let mut voting_result = voting_query
+        .query(rusqlite::params![voting_id])
+        .map_err(|e| {
+            tracing::error!("Voters names query error {}", e);
+            anyhow::format_err!("Voters names query error {e}")
+        })?;
+
+    if let Ok(Some(result)) = voting_result.next() {
+        let final_vote_result: i64 = result.get(0).map_err(|e| {
+            tracing::error!("Failed to query final vote result");
+            anyhow::format_err!("Failed to query final vote result: {e}")
+        })?;
+
+        return if final_vote_result > 0 {
+            Ok(VoteType::PRO)
+        } else {
+            Ok(VoteType::CON)
+        };
+    }
+
+    Err(anyhow::format_err!("Failed to query final vote result"))
+    //Ok(voters)
+}
+
+pub struct VoterName(String);
+
+impl FromSql for VoterName {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        String::column_result(value).and_then(|r| Ok(Self(r)))
+    }
+}
+
+pub enum VoteResult {
+    InProgress(Vec<VoterName>),
+    Finished(Vec<VoterName>, VoteType),
 }

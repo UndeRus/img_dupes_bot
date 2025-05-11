@@ -9,12 +9,12 @@ use image_hasher::{HashAlg, Hasher, HasherConfig};
 use tokio::sync::Mutex;
 
 use crate::{
-    db, delete_old_hash, find_image_by_unique_file_id, find_similar_hashes, metrics,
-    move_old_hash_to_new, HashRecord,
+    create_vote, create_voting, db, delete_old_hash, find_image_by_unique_file_id, find_similar_hashes, get_voting_info, metrics, move_old_hash_to_new, HashRecord, VoteResult, VoteType, VotingRecord, VotingType
 };
 
 const PERCEPTIVE_HASH_TOLERANCE: usize = 5;
 const SEARCH_DISTANCE_IN_SECONDS: u64 = 7 * 24 * 60 * 60;
+pub const MIN_VOTES_COUNT: i64 = 1;
 
 pub struct Indexer {
     hasher_landscape: Hasher,
@@ -210,5 +210,33 @@ impl Indexer {
         } else {
             tracing::info!("Old hash updated");
         }
+    }
+
+    #[tracing::instrument(name = "Create voting", skip(self))]
+    pub async fn create_voting(&mut self, chat_id: i64, message_id: i64, original_message_id: i64, voting_type: VotingType) -> Result<i64, ()> {
+        let db = self.db.lock().await;
+        match create_voting(&db, chat_id, message_id, original_message_id, voting_type) {
+            Ok(result) => {
+                tracing::info!("Voting created");
+                Ok(result)
+            },
+            Err(e) => {
+                tracing::error!("Voting create failed: {e}");
+                Err(())
+            },
+        }
+    }
+
+    #[tracing::instrument(name = "Get voting info", skip(self))]
+    pub async fn get_voting_info(&mut self, voting_id: i64) -> Result<VotingRecord, anyhow::Error> {
+        let db = self.db.lock().await;
+        return get_voting_info(&db, voting_id);
+    }
+
+
+    #[tracing::instrument(name = "Create new vote", skip(self))]
+    pub async fn vote(&mut self, voting_id: i64, user_id: u64, username: &str, vote_type: VoteType) -> Result<VoteResult, anyhow::Error> {
+        let mut db = self.db.lock().await;
+        return create_vote(&mut db, voting_id, user_id, username, vote_type);
     }
 }

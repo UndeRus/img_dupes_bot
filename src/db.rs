@@ -43,6 +43,7 @@ pub fn create_db(path: &str) -> Result<Connection, ()> {
         chat_id INTEGER NOT NULL,
         message_id INTEGER NOT NULL
         original_message_id INTEGER NOT NULL,
+        voting_type TEXT CHECK(voting_type IN ('nondupes', 'ignore')) NOT NULL,
         UNIQUE(id)
     );
 

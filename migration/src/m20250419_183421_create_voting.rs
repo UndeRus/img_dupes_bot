@@ -15,6 +15,7 @@ impl MigrationTrait for Migration {
                     .col(integer(Votings::ChatId))
                     .col(integer(Votings::MessageId))
                     .col(integer(Votings::OriginalMessageId))
+                    .col(text(Votings::VotingType)).check(Expr::col(Votings::VotingType).is_in(["nondupes", "ignore"]))
                     .to_owned(),
             )
             .await?;
@@ -23,6 +24,7 @@ impl MigrationTrait for Migration {
             .create_table(
                 Table::create()
                     .table(Votes::Table)
+                    .if_not_exists()
                     .col(pk_auto(Votes::Id))
                     .col(integer(Votes::VotingId))
                     .col(integer(Votes::VoteType))
@@ -31,8 +33,8 @@ impl MigrationTrait for Migration {
                     .col(string(Votes::Username))
                     .foreign_key(
                         ForeignKey::create()
-                            .from(Votings::Table, Votings::Id)
-                            .to(Votes::Table, Votes::VotingId)
+                            .from(Votes::Table, Votes::VotingId)
+                            .to(Votings::Table, Votings::Id)
                             .on_delete(ForeignKeyAction::Cascade)
                             .on_update(ForeignKeyAction::Cascade),
                     )
@@ -58,6 +60,7 @@ enum Votings {
     ChatId,
     MessageId,
     OriginalMessageId,
+    VotingType,
 }
 
 #[derive(DeriveIden)]

@@ -1,7 +1,5 @@
 use std::str::FromStr;
 
-use anyhow::Ok;
-
 #[derive(Debug, PartialEq)]
 pub struct CallbackQueryData {
     pub command: CallbackQueryCommand,

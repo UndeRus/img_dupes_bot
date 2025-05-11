@@ -1,6 +1,6 @@
 use std::{ffi::OsStr, io::Cursor, path::PathBuf};
 
-use frankenstein::{File, MethodResponse};
+use frankenstein::{response::MethodResponse, types::File};
 use reqwest::Response;
 
 // TODO: implement local file storage

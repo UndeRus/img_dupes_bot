@@ -2,33 +2,40 @@ use std::{ffi::OsStr, ops::Deref, str::FromStr, sync::Arc};
 
 use dotenvy::dotenv;
 use frankenstein::{
-    client_reqwest::Bot, AnswerCallbackQueryParams, AsyncTelegramApi, CallbackQuery,
-    EditMessageTextParams, File, GetFileParams, GetUpdatesParams,
-    InlineKeyboardButton, InlineKeyboardMarkup, Message, MethodResponse, ReplyMarkup,
-    ReplyParameters, SendMessageParams, UpdateContent, User,
+    client_reqwest::Bot, methods::{AnswerCallbackQueryParams, GetFileParams, GetUpdatesParams, SendMessageParams}, response::MethodResponse, types::{CallbackQuery, File, MaybeInaccessibleMessage, Message, ReplyParameters, User}, updates::UpdateContent, AsyncTelegramApi
 };
 
 use img_hashing_bot::{
     data::{CallbackQueryCommand, CallbackQueryData},
     hasher::Indexer,
+    keyboards::build_keyboard,
     metrics,
     storage::{s3_storage::S3FileStorage, FileStorage},
+    tg_callbacks::{process_contra_callback, process_ignore_callback, process_pro_callback, process_wrong_callback},
     tracing_setup::init_tracing,
 };
-use migration::sea_orm::{sqlx::{sqlite::SqliteConnectOptions, SqlitePool}, SqlxSqliteConnector};
+use migration::sea_orm::{
+    sqlx::{sqlite::SqliteConnectOptions, SqlitePool},
+    SqlxSqliteConnector,
+};
 use tokio::{signal, sync::Mutex};
 
 const MESSAGE_FOUND_MSG: &str = "Эту картинку уже постили тут:";
 const REPLY_NOT_FOUND_ERROR: &str = "Bad Request: message to be replied not found";
 
-
 async fn apply_migrations(db_path: &str) {
     use migration::{Migrator, MigratorTrait};
-    let opts = SqliteConnectOptions::new().filename(db_path).create_if_missing(true);
+    let opts = SqliteConnectOptions::new()
+        .filename(db_path)
+        .create_if_missing(true);
 
-    let pool = SqlitePool::connect_with(opts).await.expect("Failed to connect to apply migrations");
+    let pool = SqlitePool::connect_with(opts)
+        .await
+        .expect("Failed to connect to apply migrations");
     let db = SqlxSqliteConnector::from_sqlx_sqlite_pool(pool);
-    Migrator::up(&db, None).await.expect("Failed to apply transactions");
+    Migrator::up(&db, None)
+        .await
+        .expect("Failed to apply transactions");
 }
 
 #[tokio::main]
@@ -90,10 +97,11 @@ async fn main() -> Result<(), ()> {
                                 }
                                 UpdateContent::CallbackQuery(callback_message) => {
                                     let api_clone = api.clone();
+                                    let indexer = indexer.clone();
                                     tokio::spawn(async move {
-                                        let result = process_callback(&api_clone, callback_message).await;
+                                        let result = process_callback(&api_clone, callback_message, indexer).await;
                                         if let Err(err) = result {
-                                            tracing::warn!("Failed to process buttons: {}", err);
+                                            tracing::warn!("Failed to process buttons: {err}");
                                         }
                                     });
                                 }
@@ -167,7 +175,6 @@ async fn process_message<T: FileStorage>(
             {
                 if is_message_removed(&e) {
                     tracing::warn!("Reply not found, update existing record");
-                    tracing::warn!("Reply not found, update existing record");
                     metrics::mtr_removed_originals_count(1);
                     let hash_record = file_processed_info;
                     // Update hash record of removed message
@@ -175,7 +182,7 @@ async fn process_message<T: FileStorage>(
                         .update_old_hash(hash_record.id, message.chat.id, message.message_id as i64)
                         .await;
                 } else {
-                    tracing::error!("Failed to send message about same file id {}", e);
+                    tracing::error!("Failed to send message about same file id {e}");
                 }
                 return Ok(());
             }
@@ -204,7 +211,7 @@ async fn process_message<T: FileStorage>(
                 let image = &storage
                     .load_file(&file_uri)
                     .await
-                    .map_err(|e| anyhow::format_err!("Failed to load image from s3: {}", e))?;
+                    .map_err(|e| anyhow::format_err!("Failed to load image from s3: {e}"))?;
 
                 let mut indexer = indexer.lock().await;
 
@@ -221,7 +228,7 @@ async fn process_message<T: FileStorage>(
 
                 // Hash found
                 if !result.is_empty() {
-                    log::info!("Found similar images images {:?}", result);
+                    log::info!("Found similar images images {result:?}");
                     let found_result_in_chat = result
                         .first()
                         .ok_or(anyhow::format_err!("Failed to find first image in found"))?;
@@ -250,9 +257,7 @@ async fn process_message<T: FileStorage>(
                         if is_message_removed(&e) {
                             tracing::warn!("Reply not found, update existing record");
                             metrics::mtr_removed_originals_count(1);
-                            let hash_record = file_processed_info.ok_or(anyhow::format_err!(
-                                "Failed to extract data from file processed info"
-                            ))?;
+                            let hash_record = found_result_in_chat;
                             indexer
                                 .update_old_hash(
                                     hash_record.id,
@@ -366,42 +371,17 @@ async fn send_message(
         .chat_id(chat_id)
         .text(MESSAGE_FOUND_MSG)
         .reply_parameters(reply_params)
-        //.reply_markup(build_keyboard(chat_id, message_id))
+        .reply_markup(build_keyboard(chat_id, message_id))
         .build();
     api.send_message(&send_message_params).await
 }
 
-fn build_keyboard(chat_id: i64, message_id: i32) -> ReplyMarkup {
-    let mut keyboard: Vec<Vec<InlineKeyboardButton>> = Vec::new();
-
-    let mut row = vec![];
-
-    row.push(
-        InlineKeyboardButton::builder()
-            .text("😡 not dupe")
-            .callback_data(format!("wr {chat_id} {message_id}"))
-            .build(),
-    );
-    row.push(
-        InlineKeyboardButton::builder()
-            .text("😑 ignore")
-            .callback_data(format!("ig {chat_id} {message_id}"))
-            .build(),
-    );
-
-    keyboard.push(row);
-
-    let inline_keyboard = InlineKeyboardMarkup::builder()
-        .inline_keyboard(keyboard)
-        .build();
-
-    
-
-    ReplyMarkup::InlineKeyboardMarkup(inline_keyboard)
-}
-
-#[tracing::instrument(name = "Process inline query", skip(api))]
-async fn process_callback(api: &Bot, query: CallbackQuery) -> Result<(), anyhow::Error> {
+#[tracing::instrument(name = "Process inline query", skip(api, indexer))]
+async fn process_callback(
+    api: &Bot,
+    query: CallbackQuery,
+    indexer: Arc<Mutex<Indexer>>,
+) -> Result<(), anyhow::Error> {
     let result = api
         .answer_callback_query(
             &AnswerCallbackQueryParams::builder()
@@ -421,93 +401,70 @@ async fn process_callback(api: &Bot, query: CallbackQuery) -> Result<(), anyhow:
 
     let username = get_username(&query.from);
 
+    let user_id = query.from.id;
+
     println!("callback data: {callback_data:?}");
 
     let maybe_message = query
         .message
         .ok_or(anyhow::format_err!("Failed to find message"))?;
     let message_id = match maybe_message {
-        frankenstein::MaybeInaccessibleMessage::Message(message) => message.message_id,
-        frankenstein::MaybeInaccessibleMessage::InaccessibleMessage(_) => {
+        MaybeInaccessibleMessage::Message(message) => message.message_id,
+        MaybeInaccessibleMessage::InaccessibleMessage(_) => {
             return Err(anyhow::format_err!("Message is inaccessible"));
         }
     };
 
     match callback_data.command {
         CallbackQueryCommand::WRONG => {
-            if let Err(e) = process_wrong_callback(
+            match process_wrong_callback(
                 api,
                 callback_data.args[0],
                 i32::try_from(callback_data.args[1]).expect("Failed to cast chat id"),
                 message_id,
+                indexer.clone(),
             )
             .await
             {
-                tracing::error!("Failed to update message: {}", e);
-            } else {
-                tracing::info!("Message update sent");
+                Ok(_) => tracing::info!("Message update sent"),
+                Err(e) => tracing::error!("Failed to update message: {e}"),
             }
         }
         CallbackQueryCommand::IGNORE => {
-            process_ignore_callback().await;
+            match process_ignore_callback(
+                api,
+                callback_data.args[0],
+                i32::try_from(callback_data.args[1]).expect("Failed to cast chat id"),
+                message_id,
+                indexer.clone(),
+            )
+            .await
+            {
+                Ok(_) => tracing::info!("Message update sent"),
+                Err(e) => tracing::error!("Failed to update message: {e}"),
+            }
         }
-        CallbackQueryCommand::PRO => {}
-        CallbackQueryCommand::CON => {}
+        CallbackQueryCommand::PRO => {
+            //match process_vote_pro_callback
+
+            // pass: chat_id, message_id, original_message_id???, user_id, username
+            match process_pro_callback(callback_data.args[0], user_id, &username, &api, indexer).await {
+                Ok(_) => tracing::info!("Message update sent"),
+                Err(e) => tracing::error!("Failed to update message {e}"),
+            }
+        }
+        CallbackQueryCommand::CON => {
+            //match process_vote_con_callback
+
+            // pass: chat_id, message_id, original_message_id???, user_id, username
+            match process_contra_callback(callback_data.args[0], user_id, &username, &api, indexer).await {
+                Ok(_) => tracing::info!("Message update sent"),
+                Err(e) => tracing::error!("Failed to update message {e}"),
+            }
+        }
     }
 
     Ok(())
-}
-
-#[tracing::instrument(name = "Process wrong dupe callback", skip(api))]
-async fn process_wrong_callback(
-    api: &Bot,
-    chat_id: i64,
-    message_id: i32,
-    bot_message_id: i32,
-) -> Result<MethodResponse<frankenstein::MessageOrBool>, frankenstein::Error> {
-    // User BLABLABLA started voting about wrong duplicate
-    // start voting
-    api.edit_message_text(
-        &EditMessageTextParams::builder()
-            .chat_id(chat_id)
-            .message_id(bot_message_id)
-            .text("Я нашел здесь дубликат, голосуем за то что это не дубликат")
-            .reply_markup(build_vote_keyboard(chat_id, message_id))
-            .build(),
-    )
-    .await
-}
-
-fn build_vote_keyboard(chat_id: i64, message_id: i32) -> InlineKeyboardMarkup {
-    let mut keyboard: Vec<Vec<InlineKeyboardButton>> = Vec::new();
-
-    let mut row = vec![];
-
-    row.push(
-        InlineKeyboardButton::builder()
-            .text("👍")
-            .callback_data(format!("pro {chat_id} {message_id}"))
-            .build(),
-    );
-    row.push(
-        InlineKeyboardButton::builder()
-            .text("👎")
-            .callback_data(format!("con {chat_id} {message_id}"))
-            .build(),
-    );
-
-    keyboard.push(row);
-
-    
-
-    InlineKeyboardMarkup::builder()
-        .inline_keyboard(keyboard)
-        .build()
-}
-
-async fn process_ignore_callback() {
-    // User BLABLABLA started voting about remove notification
-    // start voting
 }
 
 fn get_username(user: &User) -> String {
