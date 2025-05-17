@@ -7,9 +7,7 @@ use frankenstein::{
 };
 use tokio::sync::Mutex;
 
-use crate::{
-    hasher::Indexer, keyboards::build_vote_keyboard, models::VoteType, VoteResult
-};
+use crate::{hasher::Indexer, keyboards::build_vote_keyboard, models::VoteType, VoteResult};
 
 use super::{get_vote_result_text, get_vote_type_text};
 
@@ -83,8 +81,6 @@ pub async fn process_pro_callback(
             )
             .await?;
 
-            tracing::error!("Voting result: {:?}", &voting_result);
-
             if voting_result == VoteType::PRO {
                 tokio::time::sleep(Duration::from_secs(5)).await;
                 api.delete_message(
@@ -95,10 +91,8 @@ pub async fn process_pro_callback(
                 )
                 .await?;
             }
-        },
-                VoteResult::AlreadyVoted => {
-
-        },
+        }
+        VoteResult::AlreadyVoted => {}
     }
     Ok(())
 }
