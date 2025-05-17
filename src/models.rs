@@ -22,7 +22,7 @@ pub struct VotingRecord {
 }
 
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum VotingType {
     NOTDUPE,
     IGNORE,
@@ -74,4 +74,27 @@ impl TryFrom<i64> for VoteType {
         }
         return Err(anyhow::format_err!("Failed convert vote to enum"));
     }
+}
+
+pub struct VoterName(pub String);
+
+impl FromSql for VoterName {
+    fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        String::column_result(value).and_then(|r| Ok(Self(r)))
+    }
+}
+
+pub enum VoteResult {
+    InProgress(Vec<VoterName>),
+    Finished(Vec<VoterName>, VoteType),
+    AlreadyVoted,
+}
+
+#[derive(Debug)]
+pub struct VoteRecord {
+    pub id: i32,
+    pub voting_id: i64,
+    pub vote_type: VoteType,
+    pub user_id: i64,
+    pub username: String,
 }

@@ -1,16 +1,17 @@
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use frankenstein::{
     client_reqwest::Bot,
-    methods::EditMessageTextParams,
+    methods::{DeleteMessageParams, EditMessageTextParams},
     AsyncTelegramApi,
 };
 use tokio::sync::Mutex;
 
-use crate::{hasher::Indexer, models::VoteType};
+use crate::{
+    hasher::Indexer, keyboards::build_vote_keyboard, models::VoteType, VoteResult
+};
 
 use super::{get_vote_result_text, get_vote_type_text};
-
 
 #[tracing::instrument(name = "Process voting pro callback", skip(api, indexer))]
 pub async fn process_pro_callback(
@@ -29,7 +30,7 @@ pub async fn process_pro_callback(
         .await?;
 
     match vote_result {
-        crate::VoteResult::InProgress(voter_names) => {
+        VoteResult::InProgress(voter_names) => {
             let voting_info = indexer.get_voting_info(voting_id).await?;
             //TODO: send message "Голосуем за ошибочный дубликат"
             let message_id = voting_info.message_id.try_into()?;
@@ -49,11 +50,12 @@ pub async fn process_pro_callback(
                     .chat_id(voting_info.chat_id)
                     .message_id(message_id)
                     .text(message_text)
+                    .reply_markup(build_vote_keyboard(voting_id))
                     .build(),
             )
             .await?;
         }
-        crate::VoteResult::Finished(voter_names, voting_result) => {
+        VoteResult::Finished(voter_names, voting_result) => {
             //TODO: send message "Голосуем за ошибочный дубликат"
             let voting_info = indexer.get_voting_info(voting_id).await?;
             //TODO: send message "Голосуем за ошибочный дубликат"
@@ -69,7 +71,7 @@ pub async fn process_pro_callback(
                     .iter()
                     .map(|s| s.0.as_str())
                     .collect::<Vec<&str>>()
-                    .join(","),
+                    .join(", "),
             );
 
             api.edit_message_text(
@@ -81,12 +83,22 @@ pub async fn process_pro_callback(
             )
             .await?;
 
+            tracing::error!("Voting result: {:?}", &voting_result);
 
-            if voting_result == VoteType::CON {
-                //TODO удаляем сообщение
-                //TODO сохраняем инфу если голосование за кривой дубликат
+            if voting_result == VoteType::PRO {
+                tokio::time::sleep(Duration::from_secs(5)).await;
+                api.delete_message(
+                    &DeleteMessageParams::builder()
+                        .chat_id(voting_info.chat_id)
+                        .message_id(message_id)
+                        .build(),
+                )
+                .await?;
             }
-        }
+        },
+                VoteResult::AlreadyVoted => {
+
+        },
     }
     Ok(())
 }

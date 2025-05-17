@@ -14,7 +14,7 @@ use crate::{
 
 const PERCEPTIVE_HASH_TOLERANCE: usize = 5;
 const SEARCH_DISTANCE_IN_SECONDS: u64 = 7 * 24 * 60 * 60;
-pub const MIN_VOTES_COUNT: i64 = 1;
+pub const MIN_VOTES_COUNT: i64 = 5;
 
 pub struct Indexer {
     hasher_landscape: Hasher,
