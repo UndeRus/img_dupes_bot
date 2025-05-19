@@ -166,20 +166,13 @@ pub fn create_vote(
                 tracing::error!("Vote insert query error {}", e);
                 anyhow::format_err!("Vote insert query error {e}")
             })?;
-
-        //let vote_id = tx.last_insert_rowid();
     }
 
     let votes_count = get_votes_count(voting_id, &db)?;
 
     if votes_count >= MIN_VOTES_COUNT {
-        //TODO: update message, show votes result, then remove message
         let voters = get_voting_names(&db, voting_id)?;
-
         let voting_result = get_voting_result(&db, voting_id)?;
-
-        //TODO: get voting result
-
         return Ok(VoteResult::Finished(voters, voting_result));
     }
 
@@ -310,5 +303,4 @@ fn get_voting_result(conn: &Connection, voting_id: i64) -> Result<VoteType, anyh
     }
 
     Err(anyhow::format_err!("Failed to query final vote result"))
-    //Ok(voters)
 }

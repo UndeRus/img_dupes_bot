@@ -18,10 +18,6 @@ pub async fn process_wrong_callback(
     bot_message_id: i32,
     indexer: Arc<Mutex<Indexer>>,
 ) -> Result<MethodResponse<MessageOrBool>, anyhow::Error> {
-    // User BLABLABLA started voting about wrong duplicate
-    // start voting
-    //TODO: create voting
-
     let mut indexer = indexer.lock().await;
     let voting_id = indexer
         .create_voting(

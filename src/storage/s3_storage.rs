@@ -56,8 +56,6 @@ impl FileStorage for S3FileStorage {
         .map_err(|e| anyhow::format_err!("Failed to open bucket: {}", e))?;
 
         let _ = upload_url_to_bucket(bucket, url, filename).await?;
-        //TODO: return s3 uri
-        //TODO: extract hostname as endpoint
         Ok(format!("s3://{}/{}", &self.bucket_name, filename))
     }
 

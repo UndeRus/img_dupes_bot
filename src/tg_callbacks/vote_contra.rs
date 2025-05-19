@@ -24,8 +24,6 @@ pub async fn process_contra_callback(
     api: &Bot,
     indexer: Arc<Mutex<Indexer>>,
 ) -> Result<(), anyhow::Error> {
-    //TODO: search voting, check votes count, add new vote, update message with voters
-
     let mut indexer = indexer.lock().await;
 
     let vote_result = indexer

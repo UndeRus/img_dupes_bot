@@ -3,7 +3,6 @@ use std::{ffi::OsStr, io::Cursor, path::PathBuf};
 use frankenstein::{response::MethodResponse, types::File};
 use reqwest::Response;
 
-// TODO: implement local file storage
 #[tracing::instrument(name = "Save file", skip(file_response))]
 async fn save_file(
     file_path: &str,
