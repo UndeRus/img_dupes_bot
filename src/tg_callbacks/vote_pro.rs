@@ -19,7 +19,6 @@ pub async fn process_pro_callback(
     api: &Bot,
     indexer: Arc<Mutex<Indexer>>,
 ) -> Result<(), anyhow::Error> {
-    //TODO: search voting, check votes count, add new vote, update message with voters
 
     let mut indexer = indexer.lock().await;
 
@@ -30,7 +29,6 @@ pub async fn process_pro_callback(
     match vote_result {
         VoteResult::InProgress(voter_names) => {
             let voting_info = indexer.get_voting_info(voting_id).await?;
-            //TODO: send message "Голосуем за ошибочный дубликат"
             let message_id = voting_info.message_id.try_into()?;
 
             let message_text = format!(
@@ -54,9 +52,7 @@ pub async fn process_pro_callback(
             .await?;
         }
         VoteResult::Finished(voter_names, voting_result) => {
-            //TODO: send message "Голосуем за ошибочный дубликат"
             let voting_info = indexer.get_voting_info(voting_id).await?;
-            //TODO: send message "Голосуем за ошибочный дубликат"
             let message_id = voting_info.message_id.try_into()?;
 
             let vote_result = get_vote_result_text(&voting_result);

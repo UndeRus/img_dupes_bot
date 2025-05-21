@@ -75,7 +75,7 @@ pub fn find_similar_hashes(
             file_id: row.get(3).unwrap_or_default(),
             chat_id: row.get(4).unwrap_or_default(),
             message_id: row.get(5).unwrap_or_default(),
-            media_group_id, //TODO: add to schema
+            media_group_id,
         });
     }
 
