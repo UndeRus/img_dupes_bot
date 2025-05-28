@@ -148,7 +148,7 @@ async fn process_message<T: FileStorage>(
             let indexer = indexer.lock().await;
             // check by unique id
             indexer
-                .is_file_processed_info(&response.file_unique_id)
+                .is_file_processed_info(&response.file_unique_id, message.chat.id)
                 .await
         };
 

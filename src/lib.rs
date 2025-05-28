@@ -12,16 +12,21 @@ pub mod storage;
 pub mod tg_callbacks;
 pub mod tracing_setup;
 
-pub fn find_image_by_unique_file_id(conn: &Connection, unique_file_id: &str) -> Option<HashRecord> {
+pub fn find_image_by_unique_file_id(
+    conn: &Connection,
+    unique_file_id: &str,
+    chat_id: i64,
+    from_timestamp: u64,
+) -> Option<HashRecord> {
     let mut stmt = conn.prepare(
-        "SELECT id, filename, base64_hash, file_id, chat_id, message_id FROM hashes WHERE file_id = ?",
+        "SELECT id, filename, base64_hash, file_id, chat_id, message_id FROM hashes WHERE file_id = ? AND chat_id = ? AND created_at > ?",
     ).map_err(|e|{
         eprintln!("Failed to prepare statement {e}");
         e
     }).ok()?;
 
     let mut result = stmt
-        .query(rusqlite::params![unique_file_id])
+        .query(rusqlite::params![unique_file_id, chat_id, from_timestamp])
         .map_err(|e| {
             eprint!("Select error {e}");
             e

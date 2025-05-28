@@ -56,10 +56,16 @@ impl Indexer {
         }
     }
 
-    pub async fn is_file_processed_info(&self, file_id: &str) -> Option<HashRecord> {
+    pub async fn is_file_processed_info(&self, file_id: &str, chat_id: i64) -> Option<HashRecord> {
         let db = self.db.lock().await;
         let send_metric = metrics::mtr_is_file_processed_info_query_time();
-        let result = find_image_by_unique_file_id(&db, file_id);
+
+        let current_timestamp = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap()
+            .as_secs();
+        let from_timestamp = current_timestamp - SEARCH_DISTANCE_IN_SECONDS;
+        let result = find_image_by_unique_file_id(&db, file_id, chat_id, from_timestamp);
         send_metric();
         result
     }
