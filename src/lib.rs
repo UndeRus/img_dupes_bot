@@ -175,9 +175,10 @@ pub fn create_vote(
 
     let votes_count = get_votes_count(voting_id, &db)?;
 
-    if votes_count >= MIN_VOTES_COUNT {
+    let (voting_result, score) = get_voting_result(&db, voting_id)?;
+    if votes_count >= MIN_VOTES_COUNT || score.abs() >= MIN_VOTES_COUNT / 2 {
         let voters = get_voting_names(&db, voting_id)?;
-        let voting_result = get_voting_result(&db, voting_id)?;
+
         return Ok(VoteResult::Finished(voters, voting_result));
     }
 
@@ -280,7 +281,7 @@ fn get_voting_info(conn: &Connection, voting_id: i64) -> Result<VotingRecord, an
     }
 }
 
-fn get_voting_result(conn: &Connection, voting_id: i64) -> Result<VoteType, anyhow::Error> {
+fn get_voting_result(conn: &Connection, voting_id: i64) -> Result<(VoteType, i64), anyhow::Error> {
     let mut voting_query = conn
         .prepare(r"SELECT SUM(vote_type) FROM votes WHERE voting_id = ?")
         .map_err(|e| {
@@ -301,9 +302,9 @@ fn get_voting_result(conn: &Connection, voting_id: i64) -> Result<VoteType, anyh
         })?;
 
         return if final_vote_result > 0 {
-            Ok(VoteType::PRO)
+            Ok((VoteType::PRO, final_vote_result))
         } else {
-            Ok(VoteType::CON)
+            Ok((VoteType::CON, final_vote_result))
         };
     }
 
