@@ -125,7 +125,7 @@ impl Indexer {
         chat_id: i64,
         message_id: i64,
         file_id: &str,
-        media_group_id: Option<String>,
+        media_group_id: Option<&str>,
         (hash_landscape, hash_portrait, hash_square): (&str, &str, &str),
     ) -> Result<(), ()> {
         let mut db = self.db.lock().await;
@@ -149,7 +149,7 @@ impl Indexer {
                 .expect("Time went backwards")
                 .as_secs();
 
-            let media_group_id = media_group_id.unwrap_or("".to_owned());
+            let media_group_id = media_group_id.unwrap_or("");
 
             prepared_st
                 .execute(rusqlite::params![

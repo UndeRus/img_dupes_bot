@@ -2,7 +2,12 @@ use std::{ffi::OsStr, ops::Deref, str::FromStr, sync::Arc};
 
 use dotenvy::dotenv;
 use frankenstein::{
-    client_reqwest::Bot, methods::{AnswerCallbackQueryParams, GetFileParams, GetUpdatesParams, SendMessageParams}, response::MethodResponse, types::{CallbackQuery, File, MaybeInaccessibleMessage, Message, ReplyParameters, User}, updates::UpdateContent, AsyncTelegramApi
+    client_reqwest::Bot,
+    methods::{AnswerCallbackQueryParams, GetFileParams, GetUpdatesParams, SendMessageParams},
+    response::MethodResponse,
+    types::{CallbackQuery, File, MaybeInaccessibleMessage, Message, ReplyParameters, User},
+    updates::UpdateContent,
+    AsyncTelegramApi,
 };
 
 use img_hashing_bot::{
@@ -11,7 +16,10 @@ use img_hashing_bot::{
     keyboards::build_keyboard,
     metrics,
     storage::{s3_storage::S3FileStorage, FileStorage},
-    tg_callbacks::{process_contra_callback, process_ignore_callback, process_pro_callback, process_wrong_callback},
+    tg_callbacks::{
+        process_contra_callback, process_ignore_callback, process_pro_callback,
+        process_wrong_callback,
+    },
     tracing_setup::init_tracing,
 };
 use migration::sea_orm::{
@@ -42,20 +50,28 @@ async fn apply_migrations(db_path: &str) {
 async fn main() -> Result<(), ()> {
     dotenv().ok();
 
+    let otlp_endpoint =
+        &dotenvy::var("OTLP_ENDPOINT").expect("Failed to find OTLP_ENDPOINT env var");
+    let otlp_token = &dotenvy::var("OTLP_TOKEN").expect("Failed to find OTLP_TOKEN env var");
+
+    let s3_endpoint = &dotenvy::var("S3_ENDPOINT").expect("Failed to find S3_ENDPOINT env var");
+    let s3_bucket = &dotenvy::var("S3_BUCKET").expect("Failed to find S3_BUCKET env var");
+    let s3_access_key =
+        &dotenvy::var("S3_ACCESS_KEY").expect("Failed to find S3_ACCESS_KEY env var");
+    let s3_secret_key =
+        &dotenvy::var("S3_SECRET_KEY").expect("Failed to find S3_SECRET_KEY env var");
+    let bot_api_token = &dotenvy::var("TELEGRAM_BOT_API_TOKEN")
+        .expect("Failed to find TELEGRAM_BOT_API_TOKEN env var");
+
+
     let db_path = "./hashes.db";
 
     apply_migrations(db_path).await;
 
-    let finisher = init_tracing(
-        &dotenvy::var("OTLP_ENDPOINT").expect("Failed to find env var"),
-        &dotenvy::var("OTLP_TOKEN").expect("Failed to find env var"),
-    );
-    let indexer = Arc::new(Mutex::new(Indexer::new(db_path)));
 
-    let s3_endpoint = &dotenvy::var("S3_ENDPOINT").expect("Failed to find env var");
-    let s3_bucket = &dotenvy::var("S3_BUCKET").expect("Failed to find env var");
-    let s3_access_key = &dotenvy::var("S3_ACCESS_KEY").expect("Failed to find env var");
-    let s3_secret_key = &dotenvy::var("S3_SECRET_KEY").expect("Failed to find env var");
+
+    let finisher = init_tracing(&otlp_endpoint, &otlp_token);
+    let indexer = Arc::new(Mutex::new(Indexer::new(db_path)));
 
     let storage = Arc::new(Mutex::new(S3FileStorage::new(
         s3_endpoint,
@@ -64,7 +80,6 @@ async fn main() -> Result<(), ()> {
         s3_secret_key,
     )));
 
-    let bot_api_token = &dotenvy::var("TELEGRAM_BOT_API_TOKEN").unwrap();
     let api = Bot::new(bot_api_token);
     let files_endpoint = format!("https://api.telegram.org/file/bot{bot_api_token}/");
 
@@ -89,7 +104,7 @@ async fn main() -> Result<(), ()> {
                                             if message.photo.is_none() {
                                                 return;
                                             }
-                                            if let Err(e) = process_message(message, api_clone, &files_endpoint, indexer, storage).await {
+                                            if let Err(e) = process_message(&message, api_clone, &files_endpoint, indexer, storage).await {
                                                 tracing::error!("Failed to start message processing: {e}");
                                             }
                                         });
@@ -99,7 +114,7 @@ async fn main() -> Result<(), ()> {
                                     let api_clone = api.clone();
                                     let indexer = indexer.clone();
                                     tokio::spawn(async move {
-                                        let result = process_callback(&api_clone, callback_message, indexer).await;
+                                        let result = process_callback(&api_clone, &callback_message, indexer).await;
                                         if let Err(err) = result {
                                             tracing::warn!("Failed to process buttons: {err}");
                                         }
@@ -131,7 +146,7 @@ async fn main() -> Result<(), ()> {
 
 #[tracing::instrument(name = "Process new message", skip(api, storage, indexer))]
 async fn process_message<T: FileStorage>(
-    message: Message,
+    message: &Message,
     api: Bot,
     files_endpoint: &str,
     indexer: Arc<Mutex<Indexer>>,
@@ -240,7 +255,7 @@ async fn process_message<T: FileStorage>(
                         return Ok(());
                     }
 
-                    if let Some(Ok(user_id)) = message.from.map(|f| f.id.try_into()) {
+                    if let Some(Ok(user_id)) = message.from.clone().map(|f| f.id.try_into()) {
                         metrics::mtr_duplicate_count(1, message.chat.id, user_id);
                     }
 
@@ -280,7 +295,7 @@ async fn process_message<T: FileStorage>(
                             message.chat.id,
                             message.message_id as i64,
                             &response.file_unique_id,
-                            message.media_group_id,
+                            message.media_group_id.as_deref(),
                             (&hash_landscape, &hash_portrait, &hash_square),
                         )
                         .await
@@ -379,13 +394,13 @@ async fn send_message(
 #[tracing::instrument(name = "Process inline query", skip(api, indexer))]
 async fn process_callback(
     api: &Bot,
-    query: CallbackQuery,
+    query: &CallbackQuery,
     indexer: Arc<Mutex<Indexer>>,
 ) -> Result<(), anyhow::Error> {
     let result = api
         .answer_callback_query(
             &AnswerCallbackQueryParams::builder()
-                .callback_query_id(query.id)
+                .callback_query_id(query.id.clone())
                 .build(),
         )
         .await;
@@ -395,7 +410,10 @@ async fn process_callback(
         return Err(anyhow::format_err!("{}", err));
     }
 
-    let data = query.data.ok_or(anyhow::format_err!("No inline data"))?;
+    let data = query
+        .data
+        .clone()
+        .ok_or(anyhow::format_err!("No inline data"))?;
 
     let callback_data = CallbackQueryData::from_str(&data)?;
 
@@ -407,6 +425,7 @@ async fn process_callback(
 
     let maybe_message = query
         .message
+        .clone()
         .ok_or(anyhow::format_err!("Failed to find message"))?;
     let message_id = match maybe_message {
         MaybeInaccessibleMessage::Message(message) => message.message_id,
@@ -448,7 +467,9 @@ async fn process_callback(
             //match process_vote_pro_callback
 
             // pass: chat_id, message_id, original_message_id???, user_id, username
-            match process_pro_callback(callback_data.args[0], user_id, &username, &api, indexer).await {
+            match process_pro_callback(callback_data.args[0], user_id, &username, &api, indexer)
+                .await
+            {
                 Ok(_) => tracing::info!("Message update sent"),
                 Err(e) => tracing::error!("Failed to update message {e}"),
             }
@@ -457,7 +478,9 @@ async fn process_callback(
             //match process_vote_con_callback
 
             // pass: chat_id, message_id, original_message_id???, user_id, username
-            match process_contra_callback(callback_data.args[0], user_id, &username, &api, indexer).await {
+            match process_contra_callback(callback_data.args[0], user_id, &username, &api, indexer)
+                .await
+            {
                 Ok(_) => tracing::info!("Message update sent"),
                 Err(e) => tracing::error!("Failed to update message {e}"),
             }
