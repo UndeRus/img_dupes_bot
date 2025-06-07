@@ -39,9 +39,9 @@ opentelemetry-stdout = "0.28.0"
 opentelemetry_sdk = "0.28.0"
 quanta = "0.12.5"
 rayon = "1.10.0"
-reqwest = { version = "0.12.12", features = ["rustls-tls", "stream"] }
+reqwest = { version = "0.12.12", default-features = false, features = ["rustls-tls", "stream", "charset", "http2"] }
 rusqlite = { version = "0.32.1", features = ["functions", "bundled"] }
-rust-s3 = "0.35.1"
+rust-s3 = { version = "0.35.1", default-features = false, features = ["with-tokio", "tokio-rustls-tls"] }
 tokio = { version = "1.43.0", features = ["macros", "rt-multi-thread", "signal"] }
 tokio-util = "0.7.14"
 tonic = "0.12.3"
