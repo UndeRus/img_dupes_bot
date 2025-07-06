@@ -49,7 +49,7 @@ pub async fn process_contra_callback(
                 &EditMessageTextParams::builder()
                     .chat_id(voting_info.chat_id)
                     .message_id(message_id)
-                    .reply_markup(build_vote_keyboard(voting_id))
+                    .reply_markup(build_vote_keyboard(voting_id, &voting_info.voting_type))
                     .text(message_text)
                     .build(),
             )

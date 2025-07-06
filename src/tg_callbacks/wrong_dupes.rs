@@ -34,7 +34,7 @@ pub async fn process_wrong_callback(
             .chat_id(chat_id)
             .message_id(bot_message_id)
             .text("Я думаю это дубликат, голосуем за то что это не дубликат")
-            .reply_markup(build_vote_keyboard(voting_id))
+            .reply_markup(build_vote_keyboard(voting_id, &VotingType::NOTDUPE))
             .build(),
     )
     .await

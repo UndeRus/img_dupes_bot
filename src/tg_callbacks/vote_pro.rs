@@ -46,7 +46,7 @@ pub async fn process_pro_callback(
                     .chat_id(voting_info.chat_id)
                     .message_id(message_id)
                     .text(message_text)
-                    .reply_markup(build_vote_keyboard(voting_id))
+                    .reply_markup(build_vote_keyboard(voting_id, &voting_info.voting_type))
                     .build(),
             )
             .await?;

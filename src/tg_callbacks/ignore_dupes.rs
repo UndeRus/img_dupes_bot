@@ -36,7 +36,7 @@ pub async fn process_ignore_callback(
             .chat_id(chat_id)
             .message_id(bot_message_id)
             .text("Голосуем за игнор")
-            .reply_markup(build_vote_keyboard(voting_id))
+            .reply_markup(build_vote_keyboard(voting_id, &VotingType::IGNORE))
             .build(),
     )
     .await
