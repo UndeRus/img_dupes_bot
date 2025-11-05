@@ -1,0 +1,10 @@
+services:
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: img-dupes-bot:latest
+    env_file:
+      - .env
+    volumes:
+      - ./hashes.db:/hashes.db
