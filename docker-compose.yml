@@ -4,6 +4,7 @@ services:
       context: .
       dockerfile: Dockerfile
     image: img-dupes-bot:latest
+    restart: always
     env_file:
       - .env
     volumes:
