@@ -1,0 +1,7 @@
+target
+Dockerfile
+.dockerignore
+.git
+.gitignore
+demo_pics
+*.db
