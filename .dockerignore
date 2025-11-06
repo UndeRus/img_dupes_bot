@@ -5,3 +5,4 @@ Dockerfile
 .gitignore
 demo_pics
 *.db
+files
