@@ -81,8 +81,6 @@ pub async fn process_contra_callback(
             )
             .await?;
 
-            tracing::error!("Voting result: {:?}", &voting_result);
-
             if voting_result == VoteType::PRO {
                 tokio::time::sleep(Duration::from_secs(5)).await;
                 api.delete_message(
