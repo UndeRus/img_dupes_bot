@@ -336,6 +336,7 @@ async fn download_file_from_tg<T: FileStorage>(
 ) -> Result<String, anyhow::Error> {
     let destination_path_str = get_filename(file_path, file_id);
     let tg_file_url = format!("{files_endpoint}/{file_path}");
+    tracing::info!("Telegram file url: {}", tg_file_url);
     let file_uri = storage
         .save_file(&tg_file_url, &destination_path_str)
         .await?;
