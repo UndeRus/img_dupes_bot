@@ -63,12 +63,9 @@ async fn main() -> Result<(), ()> {
     let bot_api_token = &dotenvy::var("TELEGRAM_BOT_API_TOKEN")
         .expect("Failed to find TELEGRAM_BOT_API_TOKEN env var");
 
-
     let db_path = "./hashes.db";
 
     apply_migrations(db_path).await;
-
-
 
     let finisher = init_tracing(&otlp_endpoint, &otlp_token);
     let indexer = Arc::new(Mutex::new(Indexer::new(db_path)));
@@ -211,7 +208,8 @@ async fn process_message<T: FileStorage>(
 
             let storage = storage.clone();
             let storage = storage.lock().await;
-            if let Ok(file_uri) = download_file_from_tg(
+
+            match download_file_from_tg(
                 &file_path,
                 &response.file_unique_id,
                 files_endpoint,
@@ -219,92 +217,100 @@ async fn process_message<T: FileStorage>(
             )
             .await
             {
-                if let Some(size) = response.file_size {
-                    metrics::mtr_image_size(size, message.chat.id);
-                }
-
-                let image = &storage
-                    .load_file(&file_uri)
-                    .await
-                    .map_err(|e| anyhow::format_err!("Failed to load image from s3: {e}"))?;
-
-                let mut indexer = indexer.lock().await;
-
-                // Generate hashes
-                let (hash_landscape, hash_portrait, hash_square) = indexer.hash_image(image);
-
-                // Search hash in db
-                let result = indexer
-                    .find_similar_hashes(
-                        (&hash_landscape, &hash_portrait, &hash_square),
-                        message.chat.id,
-                    )
-                    .await;
-
-                // Hash found
-                if !result.is_empty() {
-                    log::info!("Found similar images images {result:?}");
-                    let found_result_in_chat = result
-                        .first()
-                        .ok_or(anyhow::format_err!("Failed to find first image in found"))?;
-
-                    //Check if have same media group - check if same like in found
-                    if message.media_group_id.is_some()
-                        && message.media_group_id == found_result_in_chat.media_group_id
+                Ok(file_uri) => {
                     {
-                        return Ok(());
-                    }
+                        if let Some(size) = response.file_size {
+                            metrics::mtr_image_size(size, message.chat.id);
+                        }
 
-                    if let Some(Ok(user_id)) = message.from.clone().map(|f| f.id.try_into()) {
-                        metrics::mtr_duplicate_count(1, message.chat.id, user_id);
-                    }
+                        let image = &storage.load_file(&file_uri).await.map_err(|e| {
+                            anyhow::format_err!("Failed to load image from s3: {e}")
+                        })?;
 
-                    if let Err(e) = send_message(
-                        &api,
-                        message.chat.id,
-                        found_result_in_chat
-                            .message_id
-                            .try_into()
-                            .expect("Failed to convert message id"),
-                    )
-                    .await
-                    {
-                        if is_message_removed(&e) {
-                            tracing::warn!("Reply not found, update existing record");
-                            metrics::mtr_removed_originals_count(1);
-                            let hash_record = found_result_in_chat;
-                            indexer
-                                .update_old_hash(
-                                    hash_record.id,
+                        let mut indexer = indexer.lock().await;
+
+                        // Generate hashes
+                        let (hash_landscape, hash_portrait, hash_square) =
+                            indexer.hash_image(image);
+
+                        // Search hash in db
+                        let result = indexer
+                            .find_similar_hashes(
+                                (&hash_landscape, &hash_portrait, &hash_square),
+                                message.chat.id,
+                            )
+                            .await;
+
+                        // Hash found
+                        if !result.is_empty() {
+                            log::info!("Found similar images images {result:?}");
+                            let found_result_in_chat = result.first().ok_or(
+                                anyhow::format_err!("Failed to find first image in found"),
+                            )?;
+
+                            //Check if have same media group - check if same like in found
+                            if message.media_group_id.is_some()
+                                && message.media_group_id == found_result_in_chat.media_group_id
+                            {
+                                return Ok(());
+                            }
+
+                            if let Some(Ok(user_id)) = message.from.clone().map(|f| f.id.try_into())
+                            {
+                                metrics::mtr_duplicate_count(1, message.chat.id, user_id);
+                            }
+
+                            if let Err(e) = send_message(
+                                &api,
+                                message.chat.id,
+                                found_result_in_chat
+                                    .message_id
+                                    .try_into()
+                                    .expect("Failed to convert message id"),
+                            )
+                            .await
+                            {
+                                if is_message_removed(&e) {
+                                    tracing::warn!("Reply not found, update existing record");
+                                    metrics::mtr_removed_originals_count(1);
+                                    let hash_record = found_result_in_chat;
+                                    indexer
+                                        .update_old_hash(
+                                            hash_record.id,
+                                            message.chat.id,
+                                            message.message_id as i64,
+                                        )
+                                        .await;
+
+                                    //remove hashed image if original removed
+                                    storage.remove_file(&file_uri).await?;
+                                } else {
+                                    tracing::error!(
+                                        "Failed to send message about same file id {e}"
+                                    );
+                                }
+                            }
+                        } else {
+                            // Hash not found, save to index
+                            if let Err(e) = indexer
+                                .save_to_index(
+                                    &file_uri,
                                     message.chat.id,
                                     message.message_id as i64,
+                                    &response.file_unique_id,
+                                    message.media_group_id.as_deref(),
+                                    (&hash_landscape, &hash_portrait, &hash_square),
                                 )
-                                .await;
-
-                            //remove hashed image if original removed
-                            storage.remove_file(&file_uri).await?;
-                        } else {
-                            tracing::error!("Failed to send message about same file id {e}");
+                                .await
+                            {
+                                tracing::error!("Failed to index image {e:?}");
+                            }
                         }
                     }
-                } else {
-                    // Hash not found, save to index
-                    if let Err(e) = indexer
-                        .save_to_index(
-                            &file_uri,
-                            message.chat.id,
-                            message.message_id as i64,
-                            &response.file_unique_id,
-                            message.media_group_id.as_deref(),
-                            (&hash_landscape, &hash_portrait, &hash_square),
-                        )
-                        .await
-                    {
-                        tracing::error!("Failed to index image {e:?}");
-                    }
                 }
-            } else {
-                tracing::error!("Failed to upload image to S3");
+                Err(err) => {
+                    tracing::error!("Failed to download image from TG: {}", error);
+                }
             }
         }
     } else {
