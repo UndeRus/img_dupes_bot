@@ -309,7 +309,7 @@ async fn process_message<T: FileStorage>(
                     }
                 }
                 Err(err) => {
-                    tracing::error!("Failed to download image from TG: {}", error);
+                    tracing::error!("Failed to download image from TG: {}", err);
                 }
             }
         }
