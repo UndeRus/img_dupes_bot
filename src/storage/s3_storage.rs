@@ -19,7 +19,7 @@ fn get_bucket(
     secret_key: &str,
 ) -> Result<Box<Bucket>, S3Error> {
     let region = Region::Custom {
-        region: "eu-central-1".to_owned(),
+        region: "garage".to_owned(),
         endpoint: endpoint.to_owned(),
     };
 
