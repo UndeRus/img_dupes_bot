@@ -131,9 +131,25 @@ async fn upload_url_to_bucket(
     url: &str,
     filename: &str,
 ) -> Result<s3::utils::PutStreamResponse, anyhow::Error> {
-    let response = reqwest::get(url)
+    let parsed_url =
+        Url::parse(url)
+        .map_err(|e| anyhow::format_err!("Failed to parse url `{}`: {}", url, e));
+    let parsed_url = parsed_url?.clone();
+    let host = parsed_url
+        .host_str()
+        .ok_or(anyhow::format_err!("Failed to get host from url"))?
+        .to_owned();
+
+    let client = reqwest::Client::builder()
+        .retry(reqwest::retry::for_host(host).max_retries_per_request(3))
+        .build()?;
+
+    let response = client
+        .get(url)
+        .send()
         .await
         .map_err(|e| anyhow::format_err!("Failed to download url: {}", e))?;
+
     let stream = response.bytes_stream().map_err(std::io::Error::other);
     let mut stream = tokio_util::io::StreamReader::new(stream);
 
