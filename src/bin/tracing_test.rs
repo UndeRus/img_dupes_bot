@@ -7,7 +7,7 @@ fn main() {
     let finisher = init_tracing(
         &dotenvy::var("OTLP_ENDPOINT").unwrap(),
         &dotenvy::var("OTLP_TOKEN").unwrap(),
-    );
+    ).unwrap();
 
     finisher();
 }

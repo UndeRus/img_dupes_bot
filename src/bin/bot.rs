@@ -67,7 +67,7 @@ async fn main() -> Result<(), ()> {
 
     apply_migrations(db_path).await;
 
-    let finisher = init_tracing(&otlp_endpoint, &otlp_token);
+    let finisher = init_tracing(&otlp_endpoint, &otlp_token).map_err(|_|())?;
     let indexer = Arc::new(Mutex::new(Indexer::new(db_path)));
 
     let storage = Arc::new(Mutex::new(S3FileStorage::new(

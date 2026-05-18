@@ -11,15 +11,17 @@ use tracing::Level;
 use tracing_opentelemetry::OpenTelemetryLayer;
 use tracing_subscriber::{filter, fmt, layer::SubscriberExt, EnvFilter, Layer, Registry};
 
-fn metadata(auth_token: &str) -> MetadataMap {
+fn metadata(auth_token: &str) -> Result<MetadataMap, anyhow::Error> {
     let mut metadata = MetadataMap::with_capacity(3);
     metadata.insert(
         "authorization",
         format!("Basic {auth_token}").parse().unwrap(),
     );
-    metadata.insert("organization", "default".parse().unwrap());
-    metadata.insert("stream-name", "default".parse().unwrap());
-    metadata
+    let organization = "default".parse()?;
+    metadata.insert("organization", organization);
+    let stream_name = "default".parse()?;
+    metadata.insert("stream-name", stream_name);
+    Ok(metadata)
 }
 
 fn resource() -> Resource {
@@ -49,12 +51,13 @@ fn init_tracing_subscriber(tracer: Tracer) {
     tracing::subscriber::set_global_default(subscriber).expect("Setting tracing subscriber failed");
 }
 
-pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() {
+pub fn init_tracing(otlp_endpoint: &str, token: &str) -> Result<impl Fn(), anyhow::Error> {
     // To send traces to jaeger
+    let metadata = metadata(token)?;
     let trace_exporter = SpanExporter::builder()
         .with_tonic()
         .with_endpoint(otlp_endpoint)
-        .with_metadata(metadata(token))
+        .with_metadata(metadata.clone())
         .build()
         .expect("Failed to init otlp tracers exporter");
 
@@ -72,7 +75,7 @@ pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() {
     let metrics_exporter = MetricExporter::builder()
         .with_tonic()
         .with_endpoint(otlp_endpoint)
-        .with_metadata(metadata(token))
+        .with_metadata(metadata)
         .build()
         .expect("Failed to init otlp metrics exporter");
 
@@ -83,12 +86,12 @@ pub fn init_tracing(otlp_endpoint: &str, token: &str) -> impl Fn() {
 
     global::set_meter_provider(metrics_provider.clone());
 
-    Box::new(move || {
+    Ok(Box::new(move || {
         tracer_provider
             .shutdown()
             .expect("Failed to shutdown tracer");
         metrics_provider
             .shutdown()
             .expect("Failed to shutdown metrics");
-    })
+    }))
 }
