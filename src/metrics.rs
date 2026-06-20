@@ -4,7 +4,6 @@ use opentelemetry::{global, metrics::Meter, KeyValue};
 use quanta::Clock;
 
 fn meter() -> Meter {
-    
     global::meter("img dupes tgbot")
 }
 
@@ -14,10 +13,7 @@ fn mtr_exec_time(name: &'static str) -> impl Fn() {
     let time_metric = meter().u64_gauge(name).build();
     move || {
         let duration = clock.now().duration_since(now);
-        time_metric.record(
-            duration.as_millis().try_into().unwrap_or(u64::MAX),
-            &[],
-        );
+        time_metric.record(duration.as_millis().try_into().unwrap_or(u64::MAX), &[]);
     }
 }
 

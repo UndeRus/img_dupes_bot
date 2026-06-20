@@ -12,7 +12,7 @@ use frankenstein::{
 
 use img_hashing_bot::{
     data::{CallbackQueryCommand, CallbackQueryData},
-    hasher::Indexer,
+    hasher::PHashIndexer,
     keyboards::build_keyboard,
     metrics,
     storage::{s3_storage::S3FileStorage, FileStorage},
@@ -67,8 +67,8 @@ async fn main() -> Result<(), ()> {
 
     apply_migrations(db_path).await;
 
-    let finisher = init_tracing(&otlp_endpoint, &otlp_token).map_err(|_|())?;
-    let indexer = Arc::new(Mutex::new(Indexer::new(db_path)));
+    let finisher = init_tracing(&otlp_endpoint, &otlp_token).map_err(|_| ())?;
+    let indexer = Arc::new(Mutex::new(PHashIndexer::new(db_path)));
 
     let storage = Arc::new(Mutex::new(S3FileStorage::new(
         s3_endpoint,
@@ -146,7 +146,7 @@ async fn process_message<T: FileStorage>(
     message: &Message,
     api: Bot,
     files_endpoint: &str,
-    indexer: Arc<Mutex<Indexer>>,
+    indexer: Arc<Mutex<PHashIndexer>>,
     storage: Arc<Mutex<T>>,
 ) -> Result<(), anyhow::Error> {
     // Skip all replies
@@ -230,13 +230,13 @@ async fn process_message<T: FileStorage>(
                         let mut indexer = indexer.lock().await;
 
                         // Generate hashes
-                        let (hash_landscape, hash_portrait, hash_square) =
+                        let calculated_hashes =
                             indexer.hash_image(image);
 
                         // Search hash in db
                         let result = indexer
                             .find_similar_hashes(
-                                (&hash_landscape, &hash_portrait, &hash_square),
+                                &calculated_hashes,
                                 message.chat.id,
                             )
                             .await;
@@ -299,7 +299,7 @@ async fn process_message<T: FileStorage>(
                                     message.message_id as i64,
                                     &response.file_unique_id,
                                     message.media_group_id.as_deref(),
-                                    (&hash_landscape, &hash_portrait, &hash_square),
+                                    &calculated_hashes,
                                 )
                                 .await
                             {
@@ -402,7 +402,7 @@ async fn send_message(
 async fn process_callback(
     api: &Bot,
     query: &CallbackQuery,
-    indexer: Arc<Mutex<Indexer>>,
+    indexer: Arc<Mutex<PHashIndexer>>,
 ) -> Result<(), anyhow::Error> {
     let result = api
         .answer_callback_query(

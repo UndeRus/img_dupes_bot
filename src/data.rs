@@ -44,9 +44,6 @@ impl FromStr for CallbackQueryData {
             let arg = i64::from_str(arg_str)?;
             args.push(arg);
         }
-        Ok(CallbackQueryData {
-            command,
-            args,
-        })
+        Ok(CallbackQueryData { command, args })
     }
 }

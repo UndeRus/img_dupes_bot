@@ -132,8 +132,7 @@ async fn upload_url_to_bucket(
     filename: &str,
 ) -> Result<s3::utils::PutStreamResponse, anyhow::Error> {
     let parsed_url =
-        Url::parse(url)
-        .map_err(|e| anyhow::format_err!("Failed to parse url `{}`: {}", url, e));
+        Url::parse(url).map_err(|e| anyhow::format_err!("Failed to parse url `{}`: {}", url, e));
     let parsed_url = parsed_url?.clone();
     let host = parsed_url
         .host_str()

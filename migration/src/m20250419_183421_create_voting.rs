@@ -15,7 +15,8 @@ impl MigrationTrait for Migration {
                     .col(integer(Votings::ChatId))
                     .col(integer(Votings::MessageId))
                     .col(integer(Votings::OriginalMessageId))
-                    .col(text(Votings::VotingType)).check(Expr::col(Votings::VotingType).is_in(["nondupes", "ignore"]))
+                    .col(text(Votings::VotingType))
+                    .check(Expr::col(Votings::VotingType).is_in(["nondupes", "ignore"]))
                     .to_owned(),
             )
             .await?;

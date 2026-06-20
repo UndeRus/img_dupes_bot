@@ -1,15 +1,13 @@
 use crate::models::{VoteType, VotingType};
 
-mod wrong_dupes;
 mod ignore_dupes;
-mod vote_pro;
 mod vote_contra;
-pub use wrong_dupes::process_wrong_callback;
+mod vote_pro;
+mod wrong_dupes;
 pub use ignore_dupes::process_ignore_callback;
-pub use vote_pro::process_pro_callback;
 pub use vote_contra::process_contra_callback;
-
-
+pub use vote_pro::process_pro_callback;
+pub use wrong_dupes::process_wrong_callback;
 
 fn get_vote_type_text(voting_type: &VotingType) -> String {
     match voting_type {

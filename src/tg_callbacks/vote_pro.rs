@@ -7,7 +7,12 @@ use frankenstein::{
 };
 use tokio::sync::Mutex;
 
-use crate::{hasher::Indexer, keyboards::build_vote_keyboard, models::VoteType, VoteResult};
+use crate::{
+    hasher::{Indexer, PHashIndexer},
+    keyboards::build_vote_keyboard,
+    models::VoteType,
+    VoteResult,
+};
 
 use super::{get_vote_result_text, get_vote_type_text};
 
@@ -17,9 +22,8 @@ pub async fn process_pro_callback(
     user_id: u64,
     username: &str,
     api: &Bot,
-    indexer: Arc<Mutex<Indexer>>,
+    indexer: Arc<Mutex<PHashIndexer>>,
 ) -> Result<(), anyhow::Error> {
-
     let mut indexer = indexer.lock().await;
 
     let vote_result = indexer

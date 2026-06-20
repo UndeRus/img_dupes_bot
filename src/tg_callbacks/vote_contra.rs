@@ -8,7 +8,7 @@ use frankenstein::{
 use tokio::sync::Mutex;
 
 use crate::{
-    hasher::Indexer,
+    hasher::{Indexer, PHashIndexer},
     keyboards::build_vote_keyboard,
     models::VoteType,
     VoteResult,
@@ -22,7 +22,7 @@ pub async fn process_contra_callback(
     user_id: u64,
     username: &str,
     api: &Bot,
-    indexer: Arc<Mutex<Indexer>>,
+    indexer: Arc<Mutex<PHashIndexer>>,
 ) -> Result<(), anyhow::Error> {
     let mut indexer = indexer.lock().await;
 

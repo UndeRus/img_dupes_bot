@@ -29,13 +29,11 @@ pub fn build_keyboard(chat_id: i64, message_id: i32) -> ReplyMarkup {
     ReplyMarkup::InlineKeyboardMarkup(inline_keyboard)
 }
 
-
 pub fn build_vote_keyboard(voting_id: i64, voting_type: &VotingType) -> InlineKeyboardMarkup {
     let (pro_text, contra_text) = match voting_type {
         VotingType::NOTDUPE => ("не баян", "баян"),
         VotingType::IGNORE => ("ПОХУЙ", "похуй"),
     };
-
 
     let mut keyboard: Vec<Vec<InlineKeyboardButton>> = Vec::new();
 

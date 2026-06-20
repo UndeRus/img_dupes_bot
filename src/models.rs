@@ -1,7 +1,5 @@
 use rusqlite::types::{FromSql, FromSqlResult, ValueRef};
 
-
-
 #[derive(Debug)]
 pub struct HashRecord {
     pub id: i32,
@@ -20,7 +18,6 @@ pub struct VotingRecord {
     pub message_id: i64,
     pub voting_type: VotingType,
 }
-
 
 #[derive(Debug, PartialEq)]
 pub enum VotingType {

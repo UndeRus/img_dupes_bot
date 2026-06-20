@@ -8,7 +8,11 @@ use frankenstein::{
 };
 use tokio::sync::Mutex;
 
-use crate::{hasher::Indexer, keyboards::build_vote_keyboard, models::VotingType};
+use crate::{
+    hasher::{Indexer, PHashIndexer},
+    keyboards::build_vote_keyboard,
+    models::VotingType,
+};
 
 #[tracing::instrument(name = "Process wrong dupe callback", skip(api, indexer))]
 pub async fn process_wrong_callback(
@@ -16,7 +20,7 @@ pub async fn process_wrong_callback(
     chat_id: i64,
     message_id: i32,
     bot_message_id: i32,
-    indexer: Arc<Mutex<Indexer>>,
+    indexer: Arc<Mutex<PHashIndexer>>,
 ) -> Result<MethodResponse<MessageOrBool>, anyhow::Error> {
     let mut indexer = indexer.lock().await;
     let voting_id = indexer
