@@ -8,6 +8,7 @@ pub mod hasher;
 pub mod keyboards;
 pub mod metrics;
 mod models;
+pub mod siglip2;
 pub mod storage;
 pub mod tg_callbacks;
 pub mod tracing_setup;
