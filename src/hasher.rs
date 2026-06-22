@@ -21,7 +21,7 @@ pub const MIN_VOTES_COUNT: i64 = 5;
 
 pub trait Indexer {
     async fn is_file_processed_info(&self, file_id: &str, chat_id: i64) -> Option<HashRecord>;
-    fn hash_image(&self, img: &DynamicImage) -> (String, String, String);
+    fn hash_image(&self, img: &DynamicImage) -> Vec<CalculatedHash>;
     async fn find_similar_hashes(&self, hashes: &[CalculatedHash], chat_id: i64)
         -> Vec<HashRecord>; //TODO
     async fn save_to_index(
